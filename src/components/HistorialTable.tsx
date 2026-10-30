@@ -1,96 +1,169 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Filter, Download, ChevronLeft, ChevronRight } from 'lucide-react'
-import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
+import { useState, useEffect } from 'react'
+import { Download, Filter, Edit2, Trash2 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import * as ExcelJS from 'exceljs'
 
-interface Registro {
+interface Detalle {
   id: number
+  planilla_id: number
   equipo: string
   proveedor: string
   operador: string
   cedula: string
   fase: string
-  hInicial: number
-  hFinal: number
-  horaInicio: string
-  horaFin: string
-  nRecibo: number
+  h_inicial: number
+  h_final: number
+  hora_inicio: string
+  hora_fin: string
+  n_recibo: number
   observaciones: string
-  fecha?: string
-  tipoCarga?: string
-  turno?: string
-  motonave?: string
-  auxiliar?: string
+  estibador: string
+  fecha: string
+  tipo_carga: string
+  turno: string
+  motonave: string
+  auxiliar: string
+  creado_en: string
 }
 
 export default function HistorialTable() {
-  const [registros, setRegistros] = useState<Registro[]>([])
-  const [infoPlanilla, setInfoPlanilla] = useState({
+  const [registros, setRegistros] = useState<Detalle[]>([])
+  const [cargando, setCargando] = useState(true)
+  const [mostrarFiltros, setMostrarFiltros] = useState(true)
+  const [filtros, setFiltros] = useState({
     fecha: '',
     tipoCarga: '',
     turno: '',
     motonave: '',
     auxiliar: '',
   })
-  const [filtroFecha, setFiltroFecha] = useState('')
-  const [filtroTipoCarga, setFiltroTipoCarga] = useState('')
-  const [filtroTurno, setFiltroTurno] = useState('')
-  const [filtroMotonave, setFiltroMotonave] = useState('')
-  const [filtroAuxiliar, setFiltroAuxiliar] = useState('')
-  const [paginaActual, setPaginaActual] = useState(1)
-  const registrosPorPagina = 10
 
-  // Cargar datos del localStorage al montar el componente
   useEffect(() => {
-    const datosGuardados = localStorage.getItem('planilla_actual')
-    if (datosGuardados) {
-      const datos = JSON.parse(datosGuardados)
-      setRegistros(datos.registros || [])
-      setInfoPlanilla({
-        fecha: datos.fecha || '',
-        tipoCarga: datos.tipoCarga || '',
-        turno: datos.turno || '',
-        motonave: datos.motonave || '',
-        auxiliar: datos.auxiliar || '',
-      })
-    }
+    cargarRegistros()
   }, [])
 
-  // Filtrar datos según los filtros seleccionados
-  const datosFiltrados = useMemo(() => {
-    return registros.filter((row) => {
-      const coincideFecha = !filtroFecha || row.fecha === filtroFecha
-      const coincideTipoCarga = !filtroTipoCarga || !row.tipoCarga || row.tipoCarga === filtroTipoCarga
-      const coincideTurno = !filtroTurno || !row.turno || row.turno === filtroTurno
-      const coincideMotonave = !filtroMotonave || !row.motonave || row.motonave === filtroMotonave
-      const coincideAuxiliar = !filtroAuxiliar || !row.auxiliar || row.auxiliar === filtroAuxiliar
-      return coincideFecha && coincideTipoCarga && coincideTurno && coincideMotonave && coincideAuxiliar
-    })
-  }, [registros, filtroFecha, filtroTipoCarga, filtroTurno, filtroMotonave, filtroAuxiliar])
+  const cargarRegistros = async () => {
+    setCargando(true)
+    try {
+      const { data: planillas, error } = await supabase
+        .from('planillas')
+        .select(`
+          id, fecha, tipo_carga, turno, motonave, auxiliar, creado_en,
+          planilla_detalles (
+            id, equipo, proveedor, operador, cedula, fase,
+            h_inicial, h_final, hora_inicio, hora_fin,
+            n_recibo, observaciones, estibador
+          )
+        `)
+        .order('creado_en', { ascending: false })
 
-  const totalPaginas = Math.ceil(datosFiltrados.length / registrosPorPagina)
-  const datosPaginados = datosFiltrados.slice(
-    (paginaActual - 1) * registrosPorPagina,
-    paginaActual * registrosPorPagina
-  )
+      if (error) {
+        console.error('Error al cargar:', error)
+        return
+      }
 
-  const handleFiltroChange = (setter: (value: string) => void) => (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-    setter(e.target.value)
-    setPaginaActual(1)
+      const registrosAplanados: Detalle[] = []
+      planillas?.forEach(planilla => {
+        planilla.planilla_detalles?.forEach((detalle: any) => {
+          registrosAplanados.push({
+            ...detalle,
+            fecha: planilla.fecha,
+            tipo_carga: planilla.tipo_carga,
+            turno: planilla.turno,
+            motonave: planilla.motonave,
+            auxiliar: planilla.auxiliar,
+            creado_en: planilla.creado_en,
+          })
+        })
+      })
+
+      setRegistros(registrosAplanados)
+    } catch (error) {
+      console.error('Error:', error)
+    }
+    setCargando(false)
   }
+
+  const registrosFiltrados = registros.filter(reg => {
+    if (filtros.fecha && reg.fecha !== filtros.fecha) return false
+    if (filtros.tipoCarga && reg.tipo_carga !== filtros.tipoCarga) return false
+    if (filtros.turno && reg.turno !== filtros.turno) return false
+    if (filtros.motonave && reg.motonave !== filtros.motonave) return false
+    if (filtros.auxiliar && reg.auxiliar !== filtros.auxiliar) return false
+    return true
+  })
 
   const limpiarFiltros = () => {
-    setFiltroFecha('')
-    setFiltroTipoCarga('')
-    setFiltroTurno('')
-    setFiltroMotonave('')
-    setFiltroAuxiliar('')
-    setPaginaActual(1)
+    setFiltros({ fecha: '', tipoCarga: '', turno: '', motonave: '', auxiliar: '' })
   }
 
-  // Función para exportar Excel con formato idéntico al original
+  // Eliminar registro
+  const eliminarRegistro = async (id: number) => {
+    if (!confirm('¿Estás seguro de eliminar este registro? Esta acción no se puede deshacer.')) return
+
+    try {
+      const { error } = await supabase
+        .from('planilla_detalles')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      // Verificar si quedan detalles de esa planilla
+      const registro = registros.find(r => r.id === id)
+      if (registro) {
+        const { data: detallesRestantes } = await supabase
+          .from('planilla_detalles')
+          .select('id')
+          .eq('planilla_id', registro.planilla_id)
+
+        if (detallesRestantes && detallesRestantes.length === 0) {
+          await supabase
+            .from('planillas')
+            .delete()
+            .eq('id', registro.planilla_id)
+        }
+      }
+
+      await cargarRegistros()
+      alert('✅ Registro eliminado correctamente')
+    } catch (error: any) {
+      alert('❌ Error al eliminar: ' + error.message)
+    }
+  }
+
+  // Editar registro (redirige a NuevoRegistro con los datos)
+  const editarRegistro = (reg: Detalle) => {
+    // Guardar en localStorage para que NuevoRegistro lo cargue
+    const datosEditar = {
+      fecha: reg.fecha,
+      tipoCarga: reg.tipo_carga,
+      turno: reg.turno,
+      motonave: reg.motonave,
+      auxiliar: reg.auxiliar,
+      registros: [{
+        id: 1,
+        equipo: reg.equipo,
+        proveedor: reg.proveedor,
+        operador: reg.operador,
+        cedula: reg.cedula,
+        fase: reg.fase,
+        hInicial: reg.h_inicial,
+        hFinal: reg.h_final,
+        horaInicio: reg.hora_inicio,
+        horaFin: reg.hora_fin,
+        nRecibo: reg.n_recibo,
+        observaciones: reg.observaciones,
+        estibador: reg.estibador,
+      }],
+    }
+    localStorage.setItem('planilla_editar', JSON.stringify(datosEditar))
+    window.location.href = '/nuevo'
+  }
+
+  // Exportar Excel con formato compacto mejorado
   const exportarExcel = async () => {
-    if (datosFiltrados.length === 0) {
+    if (registrosFiltrados.length === 0) {
       alert('No hay registros para exportar')
       return
     }
@@ -98,185 +171,247 @@ export default function HistorialTable() {
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Planilla')
 
-    const azulOscuro = '1F4E79'
-    const azulClaro = 'B4C7E7'
-    const verdeFila = '00B050'
-    const blanco = 'FFFFFF'
-    //const negro = '000000'
+    const primeraPlanilla = registrosFiltrados[0]
 
-    worksheet.columns = [
-      { width: 5 }, { width: 22 }, { width: 35 }, { width: 30 },
-      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
-      { width: 12 }, { width: 12 }, { width: 12 }, { width: 20 },
+    // === FILA 1: Turno | Motonave | Auxiliar ===
+    worksheet.getCell('A1').value = 'Turno:'
+    worksheet.getCell('A1').font = { name: 'Arial', size: 11, bold: true }
+    worksheet.getCell('B1').value = primeraPlanilla?.turno || ''
+    worksheet.getCell('B1').font = { name: 'Arial', size: 11, bold: true }
+
+    worksheet.getCell('E1').value = 'Motonave:'
+    worksheet.getCell('E1').font = { name: 'Arial', size: 11, bold: true }
+    worksheet.getCell('F1').value = primeraPlanilla?.motonave || ''
+    worksheet.getCell('F1').font = { name: 'Arial', size: 11, bold: true }
+
+    worksheet.getCell('I1').value = 'Auxiliar:'
+    worksheet.getCell('I1').font = { name: 'Arial', size: 11, bold: true }
+    worksheet.getCell('J1').value = primeraPlanilla?.auxiliar || ''
+    worksheet.getCell('J1').font = { name: 'Arial', size: 11, bold: true }
+
+    // === FILA 2: Fecha | Tipo de Carga (centrado) ===
+    worksheet.getCell('A2').value = 'Fecha:'
+    worksheet.getCell('A2').font = { name: 'Arial', size: 11, bold: true }
+    worksheet.getCell('B2').value = primeraPlanilla?.fecha || ''
+    worksheet.getCell('B2').font = { name: 'Arial', size: 11 }
+
+    worksheet.mergeCells('C2:H2')
+    const celdaTipo = worksheet.getCell('C2')
+    celdaTipo.value = primeraPlanilla?.tipo_carga || ''
+    celdaTipo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF1F4E79' } }
+    celdaTipo.alignment = { horizontal: 'center', vertical: 'middle' }
+
+    // === FILA 3: Encabezados de tabla ===
+    const filaEncabezados = 3
+    const encabezados = [
+      'N°', 'Equipo', 'Proveedor', 'Operador', 'Estibador', 'Cédula',
+      'Fase', 'H.Inicial', 'H.Final', 'Hora Inicial', 'Hora Final',
+      'N° Recibo', 'Observaciones'
     ]
 
-    // Fila 1: Turno, Motonave, Auxiliar
-    const fila1 = worksheet.getRow(1)
-    fila1.height = 25
-    fila1.getCell(1).value = 'Turno:'
-    fila1.getCell(1).font = { bold: true, size: 12 }
-    fila1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila1.getCell(2).value = infoPlanilla.turno || 'DIA'
-    fila1.getCell(2).font = { bold: true, size: 12 }
-    fila1.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila1.getCell(5).value = 'Motonave:'
-    fila1.getCell(5).font = { bold: true, size: 12 }
-    fila1.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila1.getCell(6).value = infoPlanilla.motonave || ''
-    fila1.getCell(6).font = { bold: true, size: 12 }
-    fila1.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila1.getCell(9).value = 'Auxiliar:'
-    fila1.getCell(9).font = { bold: true, size: 12 }
-    fila1.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila1.getCell(10).value = infoPlanilla.auxiliar || ''
-    fila1.getCell(10).font = { bold: true, size: 12 }
-    fila1.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
+    const fila = worksheet.getRow(filaEncabezados)
+    fila.height = 22
 
-    // Fila 2: Fecha, Tipo de Carga, Horometros
-    const fila2 = worksheet.getRow(2)
-    fila2.height = 25
-    fila2.getCell(1).value = 'Fecha:'
-    fila2.getCell(1).font = { bold: true, size: 12 }
-    fila2.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila2.getCell(2).value = infoPlanilla.fecha || ''
-    fila2.getCell(2).font = { bold: true, size: 12 }
-    fila2.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila2.getCell(5).value = infoPlanilla.tipoCarga || 'ACERO'
-    fila2.getCell(5).font = { bold: true, size: 14 }
-    fila2.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila2.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' }
-    worksheet.mergeCells('E2:H2')
-    fila2.getCell(9).value = 'Horometros'
-    fila2.getCell(9).font = { bold: true, size: 12 }
-    fila2.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulClaro } }
-    fila2.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' }
-    worksheet.mergeCells('I2:L2')
-
-    // Fila 3: Encabezados
-    const fila3 = worksheet.getRow(3)
-    fila3.height = 30
-    const headers = ['N°', 'Equipo', 'Proveedor', 'Operador', 'Cédula', 'Fase', 'H.Inicial', 'H.Final', 'Hora Inicial', 'Hora Final', 'N° Recibo', 'Observaciones']
-    headers.forEach((header, index) => {
-      const cell = fila3.getCell(index + 1)
-      cell.value = header
-      cell.font = { bold: true, size: 11, color: { argb: 'FF' + blanco } }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + azulOscuro } }
+    encabezados.forEach((titulo, idx) => {
+      const col = idx + 1
+      const cell = worksheet.getCell(filaEncabezados, col)
+      cell.value = titulo
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } }
       cell.alignment = { horizontal: 'center', vertical: 'middle' }
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } },
+      }
     })
 
-    // Filas de datos
-    datosFiltrados.forEach((row, index) => {
-      const fila = worksheet.getRow(4 + index)
-      fila.height = 20
-      const valores = [row.id, row.equipo, row.proveedor, row.operador, row.cedula, row.fase, row.hInicial, row.hFinal, row.horaInicio, row.horaFin, row.nRecibo, row.observaciones]
-      const esPrimeraFase = row.fase === '1RA FASE'
-      const colorFondo = esPrimeraFase ? '4472C4' : verdeFila
-      valores.forEach((valor, colIndex) => {
-        const cell = fila.getCell(colIndex + 1)
+    // === DATOS (desde fila 4) ===
+    registrosFiltrados.forEach((reg, idx) => {
+      const rowNum = filaEncabezados + 1 + idx
+      const filaDatos = worksheet.getRow(rowNum)
+      filaDatos.height = 18
+
+      const valores = [
+        idx + 1,
+        reg.equipo,
+        reg.proveedor,
+        reg.operador,
+        reg.estibador || '-',
+        reg.cedula || '-',
+        reg.fase,
+        reg.h_inicial,
+        reg.h_final,
+        reg.hora_inicio,
+        reg.hora_fin,
+        reg.n_recibo,
+        reg.observaciones,
+      ]
+
+      valores.forEach((valor, colIdx) => {
+        const cell = worksheet.getCell(rowNum, colIdx + 1)
         cell.value = valor
-        cell.font = { size: 10 }
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + colorFondo } }
-        if ([0, 4, 5, 6, 7, 8, 9, 10].includes(colIndex)) {
+        cell.font = { name: 'Arial', size: 10 }
+        cell.alignment = { vertical: 'middle' }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFB4B4B4' } },
+          left: { style: 'thin', color: { argb: 'FFB4B4B4' } },
+          bottom: { style: 'thin', color: { argb: 'FFB4B4B4' } },
+          right: { style: 'thin', color: { argb: 'FFB4B4B4' } },
+        }
+
+        // Centrar columnas numéricas
+        if (colIdx === 0 || colIdx === 7 || colIdx === 8 || colIdx === 9 || colIdx === 10 || colIdx === 11) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' }
         }
       })
     })
 
+    // === ANCHOS DE COLUMNA ===
+    const anchos = [
+      { width: 6 },   // N°
+      { width: 22 },  // Equipo
+      { width: 35 },  // Proveedor
+      { width: 28 },  // Operador
+      { width: 22 },  // Estibador
+      { width: 14 },  // Cédula
+      { width: 12 },  // Fase
+      { width: 12 },  // H.Inicial
+      { width: 12 },  // H.Final
+      { width: 14 },  // Hora Inicial
+      { width: 14 },  // Hora Final
+      { width: 12 },  // N° Recibo
+      { width: 30 },  // Observaciones
+    ]
+    anchos.forEach((ancho, idx) => {
+      worksheet.getColumn(idx + 1).width = ancho.width
+    })
+
+    // === GENERAR ARCHIVO ===
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const fechaActual = new Date().toISOString().split('T')[0]
-    saveAs(blob, `planilla_${fechaActual}.xlsx`)
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Planilla_${primeraPlanilla?.fecha || new Date().toISOString().split('T')[0]}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
     <div className="space-y-6">
-      {/* Información de la planilla */}
-      {(infoPlanilla.fecha || infoPlanilla.motonave) && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">Información de la Planilla</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-            <div><span className="font-medium">Fecha:</span> {infoPlanilla.fecha || 'No definida'}</div>
-            <div><span className="font-medium">Tipo:</span> {infoPlanilla.tipoCarga || 'No definido'}</div>
-            <div><span className="font-medium">Turno:</span> {infoPlanilla.turno || 'No definido'}</div>
-            <div><span className="font-medium">Motonave:</span> {infoPlanilla.motonave || 'No definida'}</div>
-            <div><span className="font-medium">Auxiliar:</span> {infoPlanilla.auxiliar || 'No definido'}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Filtros */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-slate-600" />
-            <h2 className="text-lg font-semibold text-slate-900">Filtros</h2>
-          </div>
-          <button onClick={limpiarFiltros} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-            Limpiar filtros
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
-            <input type="date" value={filtroFecha} onChange={handleFiltroChange(setFiltroFecha)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            <h2 className="text-2xl font-bold text-slate-900">Historial de Planillas</h2>
+            <p className="text-slate-600">
+              {cargando ? 'Cargando...' : `Mostrando ${registrosFiltrados.length} de ${registros.length} registros`}
+            </p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Carga</label>
-            <select value={filtroTipoCarga} onChange={handleFiltroChange(setFiltroTipoCarga)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Todos</option>
-              <option value="ACERO">ACERO</option>
-              <option value="COQUE">COQUE</option>
-              <option value="TUBERIA">TUBERIA</option>
-              <option value="ALAMBRON">ALAMBRON</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Turno</label>
-            <select value={filtroTurno} onChange={handleFiltroChange(setFiltroTurno)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Todos</option>
-              <option value="DIA">DIA</option>
-              <option value="NOCHE">NOCHE</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Motonave</label>
-            <select value={filtroMotonave} onChange={handleFiltroChange(setFiltroMotonave)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Todas</option>
-              <option value="BAO RIN LING">BAO RIN LING</option>
-              <option value="HONG RUN 16">HONG RUN 16</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Auxiliar</label>
-            <select value={filtroAuxiliar} onChange={handleFiltroChange(setFiltroAuxiliar)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Todos</option>
-              <option value="MIGUEL RACEDO">MIGUEL RACEDO</option>
-              <option value="CRISTIAN POLO">CRISTIAN POLO</option>
-            </select>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setMostrarFiltros(!mostrarFiltros)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
+            >
+              <Filter className="w-4 h-4" />
+              {mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros'}
+            </button>
+            <button
+              onClick={exportarExcel}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+            >
+              <Download className="w-4 h-4" />
+              Exportar Excel
+            </button>
           </div>
         </div>
+
+        {mostrarFiltros && (
+          <div className="bg-slate-50 rounded-lg p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-slate-900">Filtros</h3>
+              <button onClick={limpiarFiltros} className="text-sm text-blue-600 hover:text-blue-800">
+                Limpiar filtros
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Fecha</label>
+                <input
+                  type="date"
+                  value={filtros.fecha}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, fecha: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tipo de Carga</label>
+                <select
+                  value={filtros.tipoCarga}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, tipoCarga: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos</option>
+                  <option value="ACERO">ACERO</option>
+                  <option value="COQUE">COQUE</option>
+                  <option value="TUBERIA">TUBERIA</option>
+                  <option value="ALAMBRON">ALAMBRON</option>
+                  <option value="GRANELES">GRANELES</option>
+                  <option value="CONTENEDORES">CONTENEDORES</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Turno</label>
+                <select
+                  value={filtros.turno}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, turno: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos</option>
+                  <option value="DIA">DIA</option>
+                  <option value="NOCHE">NOCHE</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Motonave</label>
+                <select
+                  value={filtros.motonave}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, motonave: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todas</option>
+                  {registros
+                    .map(r => r.motonave)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Auxiliar</label>
+                <select
+                  value={filtros.auxiliar}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, auxiliar: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos</option>
+                  {registros
+                    .map(r => r.auxiliar)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Botón Exportar y contador */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-600">
-          Mostrando <span className="font-semibold">{datosFiltrados.length}</span> de{' '}
-          <span className="font-semibold">{registros.length}</span> registros
-        </p>
-        <button onClick={exportarExcel}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
-          <Download className="w-4 h-4" />
-          Exportar Excel
-        </button>
-      </div>
-
-      {/* Tabla */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -286,6 +421,7 @@ export default function HistorialTable() {
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Equipo</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Proveedor</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Operador</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Estibador</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Cédula</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Fase</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Inicial</th>
@@ -294,58 +430,68 @@ export default function HistorialTable() {
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Hora Final</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">N° Recibo</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Observaciones</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {datosPaginados.length > 0 ? (
-                datosPaginados.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-3 text-sm font-medium">{row.id}</td>
-                    <td className="px-3 py-3 text-sm font-medium">{row.equipo}</td>
-                    <td className="px-3 py-3 text-sm">{row.proveedor}</td>
-                    <td className="px-3 py-3 text-sm">{row.operador}</td>
-                    <td className="px-3 py-3 text-sm">{row.cedula}</td>
-                    <td className="px-3 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        row.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                      }`}>{row.fase}</span>
-                    </td>
-                    <td className="px-3 py-3 text-sm font-mono">{row.hInicial}</td>
-                    <td className="px-3 py-3 text-sm font-mono">{row.hFinal}</td>
-                    <td className="px-3 py-3 text-sm">{row.horaInicio}</td>
-                    <td className="px-3 py-3 text-sm">{row.horaFin}</td>
-                    <td className="px-3 py-3 text-sm font-mono">{row.nRecibo}</td>
-                    <td className="px-3 py-3 text-sm">{row.observaciones}</td>
-                  </tr>
-                ))
-              ) : (
+              {cargando ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
-                    {registros.length === 0 
-                      ? 'No hay registros. Ve a "Nuevo registro" para agregar datos.' 
-                      : 'No hay registros que coincidan con los filtros seleccionados'}
+                  <td colSpan={14} className="px-4 py-8 text-center text-slate-500">
+                    Cargando registros...
                   </td>
                 </tr>
+              ) : registrosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={14} className="px-4 py-8 text-center text-slate-500">
+                    No hay registros. Ve a "Nuevo registro" para agregar datos.
+                  </td>
+                </tr>
+              ) : (
+                registrosFiltrados.map((reg, idx) => (
+                  <tr key={reg.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 text-sm font-medium">{idx + 1}</td>
+                    <td className="px-3 py-3 text-sm">{reg.equipo}</td>
+                    <td className="px-3 py-3 text-sm">{reg.proveedor}</td>
+                    <td className="px-3 py-3 text-sm">{reg.operador}</td>
+                    <td className="px-3 py-3 text-sm">{reg.estibador || '-'}</td>
+                    <td className="px-3 py-3 text-sm">{reg.cedula || '-'}</td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {reg.fase}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.h_inicial}</td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.h_final}</td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.hora_inicio}</td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.hora_fin}</td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.n_recibo}</td>
+                    <td className="px-3 py-3 text-sm">{reg.observaciones}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex justify-center gap-2">
+                        <button
+                          onClick={() => editarRegistro(reg)}
+                          className="text-blue-600 hover:text-blue-800 p-1"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => eliminarRegistro(reg.id)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
-
-        {totalPaginas > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
-            <p className="text-sm text-slate-600">Página {paginaActual} de {totalPaginas}</p>
-            <div className="flex gap-2">
-              <button onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1}
-                className="flex items-center gap-1 px-3 py-1 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50">
-                <ChevronLeft className="w-4 h-4" /> Anterior
-              </button>
-              <button onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual === totalPaginas}
-                className="flex items-center gap-1 px-3 py-1 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50">
-                Siguiente <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Plus, Edit2, Trash2, Save, X, Users, Truck, Box, Layers, UserShield, Clock, Ship, Package } from 'lucide-react'
 
-type TablaActiva = 'operadores' | 'proveedores' | 'equipos' | 'fases' | 'auxiliares' | 'turnos' | 'naves' | 'tipos_carga'
+type TablaActiva = 'operadores' | 'proveedores' | 'equipos' | 'fases' | 'auxiliares' | 'turnos' | 'naves' | 'tipos_carga' | 'estibadores'
 
 interface Registro {
   id: number
@@ -77,6 +77,15 @@ const configTablas: Record<TablaActiva, {
       { key: 'nombre', label: 'Nombre', tipo: 'text' },
     ],
   },
+  estibadores: {
+    nombre: 'Estibadores',
+    icono: Users,
+    columnas: [
+      { key: 'nombre', label: 'Nombre', tipo: 'text' },
+      { key: 'cedula', label: 'Cédula', tipo: 'text' },
+      { key: 'tipo', label: 'Tipo', tipo: 'select', opciones: ['PROPIO', 'SUBCONTRATADO'] },
+    ],
+  },
 }
 
 export default function Admin() {
@@ -90,7 +99,6 @@ export default function Admin() {
 
   const config = configTablas[tablaActiva]
 
-  // Cargar registros de la tabla activa
   const cargarRegistros = async () => {
     setCargando(true)
     const { data, error } = await supabase
@@ -111,13 +119,11 @@ export default function Admin() {
     cargarRegistros()
   }, [tablaActiva])
 
-  // Mostrar mensaje temporal
   const mostrarMensaje = (texto: string, tipo: string) => {
     setMensaje({ texto, tipo })
     setTimeout(() => setMensaje({ texto: '', tipo: '' }), 3000)
   }
 
-  // Abrir formulario para agregar
   const abrirFormularioAgregar = () => {
     const nuevoForm: Record<string, any> = {}
     config.columnas.forEach(col => {
@@ -128,14 +134,12 @@ export default function Admin() {
     setMostrandoFormulario(true)
   }
 
-  // Abrir formulario para editar
   const abrirFormularioEditar = (registro: Registro) => {
     setFormulario({ ...registro })
     setEditandoId(registro.id)
     setMostrandoFormulario(true)
   }
 
-  // Guardar (agregar o actualizar)
   const guardarRegistro = async () => {
     if (!formulario.nombre || formulario.nombre.trim() === '') {
       mostrarMensaje('El nombre es obligatorio', 'error')
@@ -145,7 +149,6 @@ export default function Admin() {
     setCargando(true)
 
     if (editandoId !== null) {
-      // Actualizar
       const { error } = await supabase
         .from(tablaActiva)
         .update(formulario)
@@ -159,7 +162,6 @@ export default function Admin() {
         await cargarRegistros()
       }
     } else {
-      // Insertar
       const { error } = await supabase
         .from(tablaActiva)
         .insert([formulario])
@@ -176,7 +178,6 @@ export default function Admin() {
     setCargando(false)
   }
 
-  // Eliminar registro
   const eliminarRegistro = async (id: number) => {
     if (!confirm('¿Estás seguro de eliminar este registro?')) return
 
@@ -195,7 +196,6 @@ export default function Admin() {
     setCargando(false)
   }
 
-  // Cancelar formulario
   const cancelarFormulario = () => {
     setMostrandoFormulario(false)
     setEditandoId(null)
@@ -204,13 +204,11 @@ export default function Admin() {
 
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-slate-900 mb-2">Panel de Administración</h2>
         <p className="text-slate-600">Gestiona los datos maestros del sistema</p>
       </div>
 
-      {/* Mensaje de notificación */}
       {mensaje.texto && (
         <div className={`p-4 rounded-lg ${
           mensaje.tipo === 'exito' ? 'bg-green-100 text-green-800 border border-green-300' :
@@ -222,7 +220,6 @@ export default function Admin() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Menú lateral de tablas */}
         <div className="bg-white rounded-lg shadow p-4">
           <h3 className="font-semibold text-slate-900 mb-3">Tablas</h3>
           <div className="space-y-1">
@@ -252,9 +249,7 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Contenido principal */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Barra de acciones */}
           <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">{config.nombre}</h3>
@@ -269,7 +264,6 @@ export default function Admin() {
             </button>
           </div>
 
-          {/* Formulario (modal inline) */}
           {mostrandoFormulario && (
             <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-200">
               <div className="flex items-center justify-between mb-4">
@@ -338,7 +332,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* Tabla de registros */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">

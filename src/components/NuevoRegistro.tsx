@@ -1,72 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Save, X, Trash2, Edit2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 
-// Datos de ejemplo para los selects
-const equipos = [
-  'GRUA DE TIERRA 10001',
-  'ASCENSOR 02501',
-  'ASCENSOR 02502',
-  'ASCENSOR 01607',
-  'ASCENSOR 01606',
-  'ASCENSOR 01608',
-  'FMC 04',
-  'SXU637',
-  'UYW443',
-  'UYU728',
-  'TUC 279',
-  'BEP380',
-]
-
-const proveedores = [
-  'PALERMO SOCIEDAD PORTUARIA SA',
-  'EQUIPOS PORTUARIOS GLOBAL AMERICAS SA',
-  'FMC',
-  'OPL',
-]
-
-const operadores = [
-  'JORGE SALAS',
-  'JAVIER FERREIRA',
-  'EVELIO CAMARGO',
-  'OSORIO CAHUANA OSCAR ENRIQUE',
-  'NELSON DE MOYA',
-  'JOEL CERVANTE',
-  'FELIPE VASQUEZ',
-  'JAWER ROJANO',
-  'ALEJANDRO MENDOZA',
-  'RAFAEL MACHADO',
-  'FERNY CARILLO',
-  'RODOLFO PACHECO',
-]
-
-const fases = ['1RA FASE', '2DA FASE']
-
-const turnos = ['DIA', 'NOCHE']
-
-const motonaves = [
-  'BAO RIN LING',
-  'HONG RUN 16',
-  'K BEREKET',
-  'SHENG PING HAI',
-]
-
-const auxiliares = [
-  'MIGUEL RACEDO',
-  'CRISTIAN POLO',
-  'ALFREDO SOLAND',
-]
-
-const tiposCarga = [
-  'ACERO',
-  'COQUE',
-  'TUBERIA',
-  'ALAMBRON',
-  'GRANELES',
-  'CONTENEDORES',
-]
-
-// Opciones de hora en formato 24h (cada 30 minutos)
 const opcionesHora = [
   '00:00', '00:30', '01:00', '01:30', '02:00', '02:30',
   '03:00', '03:30', '04:00', '04:30', '05:00', '05:30',
@@ -91,40 +27,83 @@ interface Registro {
   horaFin: string
   nRecibo: number
   observaciones: string
+  estibador: string
 }
 
 export default function NuevoRegistro() {
   const navigate = useNavigate()
   
-  // Estado del encabezado
+  // Datos maestros desde Supabase
+  const [equipos, setEquipos] = useState<string[]>([])
+  const [proveedores, setProveedores] = useState<string[]>([])
+  const [operadores, setOperadores] = useState<string[]>([])
+  const [fases, setFases] = useState<string[]>([])
+  const [turnos, setTurnos] = useState<string[]>([])
+  const [motonaves, setMotonaves] = useState<string[]>([])
+  const [auxiliares, setAuxiliares] = useState<string[]>([])
+  const [tiposCarga, setTiposCarga] = useState<string[]>([])
+  const [estibadores, setEstibadores] = useState<string[]>([])
+
   const [fecha, setFecha] = useState('')
   const [tipoCarga, setTipoCarga] = useState('')
   const [turno, setTurno] = useState('')
   const [motonave, setMotonave] = useState('')
   const [auxiliar, setAuxiliar] = useState('')
-
-  // Estado de los registros
   const [registros, setRegistros] = useState<Registro[]>([])
+  const [guardando, setGuardando] = useState(false)
   
-  // Estado del formulario
   const [registroActual, setRegistroActual] = useState<Registro>({
-    id: 0,
-    equipo: '',
-    proveedor: '',
-    operador: '',
-    cedula: '',
-    fase: '',
-    hInicial: 0,
-    hFinal: 0,
-    horaInicio: '07:30',
-    horaFin: '19:30',
-    nRecibo: 0,
-    observaciones: '',
+    id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
+    fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
+    nRecibo: 0, observaciones: '', estibador: '',
   })
 
   const [editandoId, setEditandoId] = useState<number | null>(null)
 
-  // Cargar datos del localStorage al montar
+  // Cargar datos maestros desde Supabase
+  useEffect(() => {
+    const cargarDatosMaestros = async () => {
+      try {
+        const [
+          { data: dataEquipos },
+          { data: dataProveedores },
+          { data: dataOperadores },
+          { data: dataFases },
+          { data: dataTurnos },
+          { data: dataMotonaves },
+          { data: dataAuxiliares },
+          { data: dataTiposCarga },
+          { data: dataEstibadores },
+        ] = await Promise.all([
+          supabase.from('equipos').select('nombre'),
+          supabase.from('proveedores').select('nombre'),
+          supabase.from('operadores').select('nombre'),
+          supabase.from('fases').select('nombre'),
+          supabase.from('turnos').select('nombre'),
+          supabase.from('naves').select('nombre'),
+          supabase.from('auxiliares').select('nombre'),
+          supabase.from('tipos_carga').select('nombre'),
+          supabase.from('estibadores').select('nombre'),
+        ])
+
+        setEquipos(dataEquipos?.map(e => e.nombre) || [])
+        setProveedores(dataProveedores?.map(p => p.nombre) || [])
+        setOperadores(dataOperadores?.map(o => o.nombre) || [])
+        setFases(dataFases?.map(f => f.nombre) || [])
+        setTurnos(dataTurnos?.map(t => t.nombre) || [])
+        setMotonaves(dataMotonaves?.map(m => m.nombre) || [])
+        setAuxiliares(dataAuxiliares?.map(a => a.nombre) || [])
+        setTiposCarga(dataTiposCarga?.map(t => t.nombre) || [])
+        setEstibadores(dataEstibadores?.map(e => e.nombre) || [])
+      } catch (error) {
+        console.error('Error al cargar datos maestros:', error)
+      }
+    }
+
+    cargarDatosMaestros()
+  }, [])
+
+  // Cargar datos del localStorage (planilla en progreso)
   useEffect(() => {
     const datosGuardados = localStorage.getItem('planilla_actual')
     if (datosGuardados) {
@@ -138,32 +117,23 @@ export default function NuevoRegistro() {
     }
   }, [])
 
-  // Guardar en localStorage cuando cambien los datos
   useEffect(() => {
     const datos = {
-      fecha,
-      tipoCarga,
-      turno,
-      motonave,
-      auxiliar,
-      registros,
+      fecha, tipoCarga, turno, motonave, auxiliar, registros,
       fechaActualizacion: new Date().toISOString(),
     }
     localStorage.setItem('planilla_actual', JSON.stringify(datos))
   }, [fecha, tipoCarga, turno, motonave, auxiliar, registros])
 
-  // Manejar cambios del formulario
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setRegistroActual(prev => ({
       ...prev,
       [name]: name === 'id' || name === 'hInicial' || name === 'hFinal' || name === 'nRecibo' 
-        ? parseFloat(value) || 0 
-        : value,
+        ? parseFloat(value) || 0 : value,
     }))
   }
 
-  // Agregar o actualizar registro
   const guardarRegistro = () => {
     if (!registroActual.equipo || !registroActual.operador) {
       alert('Por favor completa al menos Equipo y Operador')
@@ -171,96 +141,120 @@ export default function NuevoRegistro() {
     }
 
     if (editandoId !== null) {
-      // Actualizar registro existente
       setRegistros(prev =>
         prev.map(r => (r.id === editandoId ? { ...registroActual, id: editandoId } : r))
       )
       setEditandoId(null)
     } else {
-      // Agregar nuevo registro
       const nuevoId = registros.length > 0 ? Math.max(...registros.map(r => r.id)) + 1 : 1
       setRegistros(prev => [...prev, { ...registroActual, id: nuevoId }])
     }
 
-    // Limpiar formulario
     setRegistroActual({
-      id: 0,
-      equipo: '',
-      proveedor: '',
-      operador: '',
-      cedula: '',
-      fase: '',
-      hInicial: 0,
-      hFinal: 0,
-      horaInicio: '07:30',
-      horaFin: '19:30',
-      nRecibo: 0,
-      observaciones: '',
+      id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
+      fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
+      nRecibo: 0, observaciones: '', estibador: '',
     })
   }
 
-  // Editar registro
   const editarRegistro = (registro: Registro) => {
     setRegistroActual(registro)
     setEditandoId(registro.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Eliminar registro
   const eliminarRegistro = (id: number) => {
     if (confirm('¿Estás seguro de eliminar este registro?')) {
       setRegistros(prev => prev.filter(r => r.id !== id))
       if (editandoId === id) {
         setEditandoId(null)
         setRegistroActual({
-          id: 0,
-          equipo: '',
-          proveedor: '',
-          operador: '',
-          cedula: '',
-          fase: '',
-          hInicial: 0,
-          hFinal: 0,
-          horaInicio: '07:30',
-          horaFin: '19:30',
-          nRecibo: 0,
-          observaciones: '',
+          id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
+          fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
+          nRecibo: 0, observaciones: '', estibador: '',
         })
       }
     }
   }
 
-  // Limpiar todo
   const limpiarTodo = () => {
-    if (confirm('¿Estás seguro de limpiar todos los datos? Esta acción no se puede deshacer.')) {
+    if (confirm('¿Estás seguro de limpiar todos los datos?')) {
       localStorage.removeItem('planilla_actual')
-      setFecha('')
-      setTipoCarga('')
-      setTurno('')
-      setMotonave('')
-      setAuxiliar('')
+      setFecha(''); setTipoCarga(''); setTurno(''); setMotonave(''); setAuxiliar('')
       setRegistros([])
       setRegistroActual({
-        id: 0,
-        equipo: '',
-        proveedor: '',
-        operador: '',
-        cedula: '',
-        fase: '',
-        hInicial: 0,
-        hFinal: 0,
-        horaInicio: '07:30',
-        horaFin: '19:30',
-        nRecibo: 0,
-        observaciones: '',
+        id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
+        fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
+        nRecibo: 0, observaciones: '', estibador: '',
       })
       setEditandoId(null)
     }
   }
 
+  const guardarEnSupabase = async () => {
+    if (!fecha || !tipoCarga || !turno || !motonave || !auxiliar) {
+      alert('Por favor completa todos los campos del encabezado')
+      return
+    }
+
+    if (registros.length === 0) {
+      alert('Agrega al menos un registro antes de guardar')
+      return
+    }
+
+    setGuardando(true)
+
+    try {
+      const { data: planillaData, error: planillaError } = await supabase
+        .from('planillas')
+        .insert([{
+          fecha: fecha,
+          tipo_carga: tipoCarga,
+          turno: turno,
+          motonave: motonave,
+          auxiliar: auxiliar,
+        }])
+        .select()
+
+      if (planillaError) throw planillaError
+
+      const planillaId = planillaData[0].id
+
+      const detalles = registros.map(r => ({
+        planilla_id: planillaId,
+        equipo: r.equipo,
+        proveedor: r.proveedor,
+        operador: r.operador,
+        cedula: r.cedula,
+        fase: r.fase,
+        h_inicial: r.hInicial,
+        h_final: r.hFinal,
+        hora_inicio: r.horaInicio,
+        hora_fin: r.horaFin,
+        n_recibo: r.nRecibo,
+        observaciones: r.observaciones,
+        estibador: r.estibador,
+      }))
+
+      const { error: detallesError } = await supabase
+        .from('planilla_detalles')
+        .insert(detalles)
+
+      if (detallesError) throw detallesError
+
+      localStorage.removeItem('planilla_actual')
+      alert('✅ Planilla guardada exitosamente')
+      navigate('/')
+    } catch (error: any) {
+      console.error('Error al guardar:', error)
+      alert('Error al guardar: ' + error.message)
+    }
+
+    setGuardando(false)
+  }
+
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-slate-900">Nuevo Registro de Planilla</h2>
@@ -280,69 +274,56 @@ export default function NuevoRegistro() {
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Carga *</label>
             <select
               value={tipoCarga}
               onChange={(e) => setTipoCarga(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Seleccionar</option>
-              {tiposCarga.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
+              {tiposCarga.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Turno *</label>
             <select
               value={turno}
               onChange={(e) => setTurno(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Seleccionar</option>
-              {turnos.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
+              {turnos.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Motonave *</label>
             <select
               value={motonave}
               onChange={(e) => setMotonave(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Seleccionar</option>
-              {motonaves.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
+              {motonaves.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Auxiliar *</label>
             <select
               value={auxiliar}
               onChange={(e) => setAuxiliar(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Seleccionar</option>
-              {auxiliares.map(a => (
-                <option key={a} value={a}>{a}</option>
-              ))}
+              {auxiliares.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Formulario de registro */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-slate-900 mb-4">
           {editandoId !== null ? 'Editar Registro' : 'Agregar Nuevo Registro'}
@@ -351,194 +332,113 @@ export default function NuevoRegistro() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Equipo *</label>
-            <select
-              name="equipo"
-              value={registroActual.equipo}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select name="equipo" value={registroActual.equipo} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
-              {equipos.map(e => (
-                <option key={e} value={e}>{e}</option>
-              ))}
+              {equipos.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Proveedor</label>
-            <select
-              name="proveedor"
-              value={registroActual.proveedor}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select name="proveedor" value={registroActual.proveedor} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
-              {proveedores.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
+              {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Operador *</label>
-            <select
-              name="operador"
-              value={registroActual.operador}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select name="operador" value={registroActual.operador} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
-              {operadores.map(o => (
-                <option key={o} value={o}>{o}</option>
-              ))}
+              {operadores.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
-
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Estibador</label>
+            <select name="estibador" value={registroActual.estibador} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+              <option value="">Seleccionar</option>
+              {estibadores.map(e => <option key={e} value={e}>{e}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Cédula</label>
-            <input
-              type="text"
-              name="cedula"
-              value={registroActual.cedula}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="N/A o número"
-            />
+            <input type="text" name="cedula" value={registroActual.cedula} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="N/A o número" />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Fase</label>
-            <select
-              name="fase"
-              value={registroActual.fase}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select name="fase" value={registroActual.fase} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
-              {fases.map(f => (
-                <option key={f} value={f}>{f}</option>
-              ))}
+              {fases.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">H.Inicial</label>
-            <input
-              type="number"
-              name="hInicial"
-              value={registroActual.hInicial || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="0"
-              step="0.1"
-            />
+            <input type="number" name="hInicial" value={registroActual.hInicial || ''} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="0" step="0.1" />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">H.Final</label>
-            <input
-              type="number"
-              name="hFinal"
-              value={registroActual.hFinal || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="0"
-              step="0.1"
-            />
+            <input type="number" name="hFinal" value={registroActual.hFinal || ''} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="0" step="0.1" />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Hora Inicial</label>
-            <select
-              name="horaInicio"
-              value={registroActual.horaInicio}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select name="horaInicio" value={registroActual.horaInicio} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
-              {opcionesHora.map(h => (
-                <option key={h} value={h}>{h}</option>
-              ))}
+              {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Hora Final</label>
-            <select
-              name="horaFin"
-              value={registroActual.horaFin}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select name="horaFin" value={registroActual.horaFin} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
-              {opcionesHora.map(h => (
-                <option key={h} value={h}>{h}</option>
-              ))}
+              {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">N° Recibo</label>
-            <input
-              type="number"
-              name="nRecibo"
-              value={registroActual.nRecibo || ''}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="0"
-            />
+            <input type="number" name="nRecibo" value={registroActual.nRecibo || ''} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="0" />
           </div>
-
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones</label>
-            <input
-              type="text"
-              name="observaciones"
-              value={registroActual.observaciones}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="1H ALIMENTACION, SIN DETENCION, etc."
-            />
+            <input type="text" name="observaciones" value={registroActual.observaciones} onChange={handleChange}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="1H ALIMENTACION, SIN DETENCION, etc." />
           </div>
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={guardarRegistro}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
+          <button onClick={guardarRegistro}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
             <Save className="w-4 h-4" />
             {editandoId !== null ? 'Actualizar' : 'Agregar'}
           </button>
           {editandoId !== null && (
-            <button
-              onClick={() => {
-                setEditandoId(null)
-                setRegistroActual({
-                  id: 0,
-                  equipo: '',
-                  proveedor: '',
-                  operador: '',
-                  cedula: '',
-                  fase: '',
-                  hInicial: 0,
-                  hFinal: 0,
-                  horaInicio: '07:30',
-                  horaFin: '19:30',
-                  nRecibo: 0,
-                  observaciones: '',
-                })
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
-            >
-              <X className="w-4 h-4" />
-              Cancelar
+            <button onClick={() => {
+              setEditandoId(null)
+              setRegistroActual({
+                id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
+                fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
+                nRecibo: 0, observaciones: '', estibador: '',
+              })
+            }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
+              <X className="w-4 h-4" /> Cancelar
             </button>
           )}
         </div>
       </div>
 
-      {/* Lista de registros agregados */}
       {registros.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">
@@ -551,6 +451,7 @@ export default function NuevoRegistro() {
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">N°</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Equipo</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Operador</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Estibador</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Fase</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Inicial</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Final</th>
@@ -564,28 +465,21 @@ export default function NuevoRegistro() {
                     <td className="px-3 py-3 text-sm font-medium">{reg.id}</td>
                     <td className="px-3 py-3 text-sm">{reg.equipo}</td>
                     <td className="px-3 py-3 text-sm">{reg.operador}</td>
+                    <td className="px-3 py-3 text-sm">{reg.estibador || '-'}</td>
                     <td className="px-3 py-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                      }`}>
-                        {reg.fase}
-                      </span>
+                      }`}>{reg.fase}</span>
                     </td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.hInicial}</td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.hFinal}</td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.nRecibo}</td>
                     <td className="px-3 py-3">
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => editarRegistro(reg)}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
+                        <button onClick={() => editarRegistro(reg)} className="text-blue-600 hover:text-blue-800">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => eliminarRegistro(reg.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
+                        <button onClick={() => eliminarRegistro(reg.id)} className="text-red-600 hover:text-red-800">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -598,14 +492,14 @@ export default function NuevoRegistro() {
         </div>
       )}
 
-      {/* Botón para ir al historial */}
       <div className="flex justify-end">
         <button
-          onClick={() => navigate('/')}
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+          onClick={guardarEnSupabase}
+          disabled={guardando}
+          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
         >
           <Save className="w-5 h-5" />
-          Guardar y Ver en Historial
+          {guardando ? 'Guardando en la nube...' : 'Guardar y Ver en Historial'}
         </button>
       </div>
     </div>
