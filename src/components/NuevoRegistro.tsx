@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, X, Trash2, Edit2, Plus } from 'lucide-react'
+import { Save, X, Trash2, Edit2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 // Datos de ejemplo para los selects

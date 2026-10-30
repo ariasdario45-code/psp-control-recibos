@@ -102,7 +102,7 @@ export default function HistorialTable() {
     const azulClaro = 'B4C7E7'
     const verdeFila = '00B050'
     const blanco = 'FFFFFF'
-    const negro = '000000'
+    //const negro = '000000'
 
     worksheet.columns = [
       { width: 5 }, { width: 22 }, { width: 35 }, { width: 30 },
