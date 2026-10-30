@@ -7,7 +7,8 @@ import {
   Users, 
   Settings, 
   Shield,
-  LogOut
+  LogOut,
+  Database
 } from 'lucide-react'
 
 const menuItems = [
@@ -17,7 +18,8 @@ const menuItems = [
   { icon: Ship, label: 'Información del Buque', path: '/' },
   { icon: Users, label: 'Usuarios', path: '/' },
   { icon: Settings, label: 'Configuración', path: '/' },
-  { icon: Shield, label: 'Administración', path: '/' },
+  { icon: Database, label: 'Administración', path: '/admin' },
+  { icon: Shield, label: 'Seguridad', path: '/' },
 ]
 
 export default function Sidebar() {

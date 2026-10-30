@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import HistorialTable from './components/HistorialTable'
 import NuevoRegistro from './components/NuevoRegistro'
+import Admin from './components/Admin'
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HistorialTable />} />
             <Route path="/nuevo" element={<NuevoRegistro />} />
+            <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>
       </div>
