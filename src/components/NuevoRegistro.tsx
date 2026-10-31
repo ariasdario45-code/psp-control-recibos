@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Save, X, Trash2, Edit2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -16,6 +16,7 @@ const opcionesHora = [
 
 interface Registro {
   id: number
+  id_detalle?: number
   equipo: string
   proveedor: string
   operador: string
@@ -32,8 +33,8 @@ interface Registro {
 
 export default function NuevoRegistro() {
   const navigate = useNavigate()
+  const datosEditCargados = useRef(false)
   
-  // Datos maestros desde Supabase
   const [equipos, setEquipos] = useState<string[]>([])
   const [proveedores, setProveedores] = useState<string[]>([])
   const [operadores, setOperadores] = useState<string[]>([])
@@ -51,6 +52,9 @@ export default function NuevoRegistro() {
   const [auxiliar, setAuxiliar] = useState('')
   const [registros, setRegistros] = useState<Registro[]>([])
   const [guardando, setGuardando] = useState(false)
+  const [modoEdicion, setModoEdicion] = useState(false)
+  const [idDetalleEditar, setIdDetalleEditar] = useState<number | null>(null)
+  const [idPlanillaEditar, setIdPlanillaEditar] = useState<number | null>(null)
   
   const [registroActual, setRegistroActual] = useState<Registro>({
     id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
@@ -60,7 +64,6 @@ export default function NuevoRegistro() {
 
   const [editandoId, setEditandoId] = useState<number | null>(null)
 
-  // Cargar datos maestros desde Supabase
   useEffect(() => {
     const cargarDatosMaestros = async () => {
       try {
@@ -103,27 +106,57 @@ export default function NuevoRegistro() {
     cargarDatosMaestros()
   }, [])
 
-  // Cargar datos del localStorage (planilla en progreso)
   useEffect(() => {
-    const datosGuardados = localStorage.getItem('planilla_actual')
-    if (datosGuardados) {
-      const datos = JSON.parse(datosGuardados)
+    if (tiposCarga.length === 0) return
+    
+    const datosEditar = localStorage.getItem('planilla_editar')
+    if (datosEditar && !datosEditCargados.current) {
+      const datos = JSON.parse(datosEditar)
+      
+      console.log('📥 Datos de edición cargados:', datos)
+      
+      setModoEdicion(true)
+      setIdPlanillaEditar(datos.planilla_id || null)
+      setIdDetalleEditar(datos.registros?.[0]?.id_detalle || null)
       setFecha(datos.fecha || '')
       setTipoCarga(datos.tipoCarga || '')
       setTurno(datos.turno || '')
       setMotonave(datos.motonave || '')
       setAuxiliar(datos.auxiliar || '')
       setRegistros(datos.registros || [])
+      
+      if (datos.registros && datos.registros.length > 0) {
+        setRegistroActual(datos.registros[0])
+      }
+      
+      datosEditCargados.current = true
+      localStorage.removeItem('planilla_editar')
+      return
     }
-  }, [])
+
+    if (!modoEdicion && !datosEditCargados.current) {
+      const datosGuardados = localStorage.getItem('planilla_actual')
+      if (datosGuardados) {
+        const datos = JSON.parse(datosGuardados)
+        setFecha(datos.fecha || '')
+        setTipoCarga(datos.tipoCarga || '')
+        setTurno(datos.turno || '')
+        setMotonave(datos.motonave || '')
+        setAuxiliar(datos.auxiliar || '')
+        setRegistros(datos.registros || [])
+      }
+    }
+  }, [tiposCarga, turnos, motonaves, auxiliares, fases])
 
   useEffect(() => {
-    const datos = {
-      fecha, tipoCarga, turno, motonave, auxiliar, registros,
-      fechaActualizacion: new Date().toISOString(),
+    if (!modoEdicion) {
+      const datos = {
+        fecha, tipoCarga, turno, motonave, auxiliar, registros,
+        fechaActualizacion: new Date().toISOString(),
+      }
+      localStorage.setItem('planilla_actual', JSON.stringify(datos))
     }
-    localStorage.setItem('planilla_actual', JSON.stringify(datos))
-  }, [fecha, tipoCarga, turno, motonave, auxiliar, registros])
+  }, [fecha, tipoCarga, turno, motonave, auxiliar, registros, modoEdicion])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -157,13 +190,13 @@ export default function NuevoRegistro() {
     })
   }
 
-  const editarRegistro = (registro: Registro) => {
+  const editarRegistroLocal = (registro: Registro) => {
     setRegistroActual(registro)
     setEditandoId(registro.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const eliminarRegistro = (id: number) => {
+  const eliminarRegistroLocal = (id: number) => {
     if (confirm('¿Estás seguro de eliminar este registro?')) {
       setRegistros(prev => prev.filter(r => r.id !== id))
       if (editandoId === id) {
@@ -180,6 +213,11 @@ export default function NuevoRegistro() {
   const limpiarTodo = () => {
     if (confirm('¿Estás seguro de limpiar todos los datos?')) {
       localStorage.removeItem('planilla_actual')
+      localStorage.removeItem('planilla_editar')
+      setModoEdicion(false)
+      setIdPlanillaEditar(null)
+      setIdDetalleEditar(null)
+      datosEditCargados.current = false
       setFecha(''); setTipoCarga(''); setTurno(''); setMotonave(''); setAuxiliar('')
       setRegistros([])
       setRegistroActual({
@@ -188,66 +226,157 @@ export default function NuevoRegistro() {
         nRecibo: 0, observaciones: '', estibador: '',
       })
       setEditandoId(null)
+      navigate('/historial')
     }
   }
 
   const guardarEnSupabase = async () => {
+    console.log('🟢 Iniciando guardarEnSupabase')
+    console.log('📋 modoEdicion:', modoEdicion)
+    console.log('📋 idPlanillaEditar:', idPlanillaEditar)
+    console.log('📋 idDetalleEditar:', idDetalleEditar)
+    console.log('📋 registroActual:', registroActual)
+
     if (!fecha || !tipoCarga || !turno || !motonave || !auxiliar) {
-      alert('Por favor completa todos los campos del encabezado')
+      alert('⚠️ Por favor completa todos los campos del encabezado')
       return
     }
 
-    if (registros.length === 0) {
-      alert('Agrega al menos un registro antes de guardar')
+    const datosAGuardar = modoEdicion ? [registroActual] : registros
+
+    if (datosAGuardar.length === 0) {
+      alert('⚠️ Agrega al menos un registro antes de guardar')
+      return
+    }
+
+    if (modoEdicion && (!idPlanillaEditar || !idDetalleEditar)) {
+      console.error('❌ IDs faltantes:', { idPlanillaEditar, idDetalleEditar })
+      alert('❌ Error: No se pudieron cargar los IDs del registro. Por favor, vuelve al Historial e intenta editar de nuevo.')
       return
     }
 
     setGuardando(true)
 
     try {
-      const { data: planillaData, error: planillaError } = await supabase
-        .from('planillas')
-        .insert([{
-          fecha: fecha,
-          tipo_carga: tipoCarga,
-          turno: turno,
-          motonave: motonave,
-          auxiliar: auxiliar,
-        }])
-        .select()
+      if (modoEdicion && idPlanillaEditar && idDetalleEditar) {
+        const detalle = datosAGuardar[0]
+        
+        console.log('🔄 ACTUALIZANDO detalle ID:', idDetalleEditar)
+        console.log('📝 Nuevos datos:', detalle)
+        
+        const { data: updateData, error: updateError } = await supabase
+          .from('planilla_detalles')
+          .update({
+            equipo: detalle.equipo,
+            proveedor: detalle.proveedor,
+            operador: detalle.operador,
+            cedula: detalle.cedula,
+            fase: detalle.fase,
+            h_inicial: detalle.hInicial,
+            h_final: detalle.hFinal,
+            hora_inicio: detalle.horaInicio,
+            hora_fin: detalle.horaFin,
+            n_recibo: detalle.nRecibo,
+            observaciones: detalle.observaciones,
+            estibador: detalle.estibador,
+          })
+          .eq('id', idDetalleEditar)
+          .select()
 
-      if (planillaError) throw planillaError
+        console.log('📊 Resultado update detalle:', { data: updateData, error: updateError })
 
-      const planillaId = planillaData[0].id
+        if (updateError) {
+          console.error('❌ Error update detalle:', updateError)
+          alert('❌ Error al actualizar: ' + updateError.message)
+          setGuardando(false)
+          return
+        }
 
-      const detalles = registros.map(r => ({
-        planilla_id: planillaId,
-        equipo: r.equipo,
-        proveedor: r.proveedor,
-        operador: r.operador,
-        cedula: r.cedula,
-        fase: r.fase,
-        h_inicial: r.hInicial,
-        h_final: r.hFinal,
-        hora_inicio: r.horaInicio,
-        hora_fin: r.horaFin,
-        n_recibo: r.nRecibo,
-        observaciones: r.observaciones,
-        estibador: r.estibador,
-      }))
+        console.log('🔄 ACTUALIZANDO planilla ID:', idPlanillaEditar)
+        
+        const { error: planillaError } = await supabase
+          .from('planillas')
+          .update({
+            fecha: fecha,
+            tipo_carga: tipoCarga,
+            turno: turno,
+            motonave: motonave,
+            auxiliar: auxiliar,
+          })
+          .eq('id', idPlanillaEditar)
 
-      const { error: detallesError } = await supabase
-        .from('planilla_detalles')
-        .insert(detalles)
+        console.log('📊 Resultado update planilla:', { error: planillaError })
 
-      if (detallesError) throw detallesError
+        if (planillaError) {
+          console.error('❌ Error update planilla:', planillaError)
+          alert('❌ Error al actualizar planilla: ' + planillaError.message)
+          setGuardando(false)
+          return
+        }
+
+        console.log('✅ ACTUALIZACIÓN EXITOSA')
+        alert('✅ Registro actualizado exitosamente')
+      } else {
+        console.log('➕ MODO CREACIÓN')
+        
+        const { data: planillaData, error: planillaError } = await supabase
+          .from('planillas')
+          .insert([{
+            fecha: fecha,
+            tipo_carga: tipoCarga,
+            turno: turno,
+            motonave: motonave,
+            auxiliar: auxiliar,
+          }])
+          .select()
+
+        if (planillaError) {
+          console.error('❌ Error insert planilla:', planillaError)
+          alert('❌ Error: ' + planillaError.message)
+          setGuardando(false)
+          return
+        }
+
+        const planillaId = planillaData[0].id
+
+        const detalles = datosAGuardar.map(r => ({
+          planilla_id: planillaId,
+          equipo: r.equipo,
+          proveedor: r.proveedor,
+          operador: r.operador,
+          cedula: r.cedula,
+          fase: r.fase,
+          h_inicial: r.hInicial,
+          h_final: r.hFinal,
+          hora_inicio: r.horaInicio,
+          hora_fin: r.horaFin,
+          n_recibo: r.nRecibo,
+          observaciones: r.observaciones,
+          estibador: r.estibador,
+        }))
+
+        const { error: detallesError } = await supabase
+          .from('planilla_detalles')
+          .insert(detalles)
+
+        if (detallesError) {
+          console.error('❌ Error insert detalles:', detallesError)
+          alert('❌ Error: ' + detallesError.message)
+          setGuardando(false)
+          return
+        }
+
+        alert('✅ Planilla guardada exitosamente')
+      }
 
       localStorage.removeItem('planilla_actual')
-      alert('✅ Planilla guardada exitosamente')
-      navigate('/')
+      localStorage.removeItem('planilla_editar')
+      datosEditCargados.current = false
+      
+      window.location.href = '/historial'
     } catch (error: any) {
-      console.error('Error al guardar:', error)
-      alert('Error al guardar: ' + error.message)
+      console.error('❌ Error general:', error)
+      alert('❌ Error: ' + error.message)
     }
 
     setGuardando(false)
@@ -257,7 +386,9 @@ export default function NuevoRegistro() {
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-900">Nuevo Registro de Planilla</h2>
+          <h2 className="text-2xl font-bold text-slate-900">
+            {modoEdicion ? 'Editar Registro de Planilla' : 'Nuevo Registro de Planilla'}
+          </h2>
           <button
             onClick={limpiarTodo}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
@@ -266,6 +397,14 @@ export default function NuevoRegistro() {
             Limpiar Todo
           </button>
         </div>
+
+        {modoEdicion && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+            ⚠️ Estás en modo edición. Los campos están pre-llenados. Modifica solo lo que necesites cambiar.
+            <br />
+            <span className="text-xs">ID Planilla: {idPlanillaEditar} | ID Detalle: {idDetalleEditar}</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
@@ -326,7 +465,7 @@ export default function NuevoRegistro() {
 
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-slate-900 mb-4">
-          {editandoId !== null ? 'Editar Registro' : 'Agregar Nuevo Registro'}
+          {modoEdicion ? 'Datos del Registro (modifica lo necesario)' : 'Agregar Nuevo Registro'}
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -418,28 +557,30 @@ export default function NuevoRegistro() {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <button onClick={guardarRegistro}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-            <Save className="w-4 h-4" />
-            {editandoId !== null ? 'Actualizar' : 'Agregar'}
-          </button>
-          {editandoId !== null && (
-            <button onClick={() => {
-              setEditandoId(null)
-              setRegistroActual({
-                id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
-                fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-                nRecibo: 0, observaciones: '', estibador: '',
-              })
-            }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
-              <X className="w-4 h-4" /> Cancelar
+        {!modoEdicion && (
+          <div className="flex gap-2">
+            <button onClick={guardarRegistro}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+              <Save className="w-4 h-4" />
+              {editandoId !== null ? 'Actualizar' : 'Agregar'}
             </button>
-          )}
-        </div>
+            {editandoId !== null && (
+              <button onClick={() => {
+                setEditandoId(null)
+                setRegistroActual({
+                  id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
+                  fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
+                  nRecibo: 0, observaciones: '', estibador: '',
+                })
+              }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
+                <X className="w-4 h-4" /> Cancelar
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {registros.length > 0 && (
+      {registros.length > 0 && !modoEdicion && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">
             Registros Agregados ({registros.length})
@@ -476,10 +617,10 @@ export default function NuevoRegistro() {
                     <td className="px-3 py-3 text-sm font-mono">{reg.nRecibo}</td>
                     <td className="px-3 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => editarRegistro(reg)} className="text-blue-600 hover:text-blue-800">
+                        <button onClick={() => editarRegistroLocal(reg)} className="text-blue-600 hover:text-blue-800">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => eliminarRegistro(reg.id)} className="text-red-600 hover:text-red-800">
+                        <button onClick={() => eliminarRegistroLocal(reg.id)} className="text-red-600 hover:text-red-800">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -499,7 +640,7 @@ export default function NuevoRegistro() {
           className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
         >
           <Save className="w-5 h-5" />
-          {guardando ? 'Guardando en la nube...' : 'Guardar y Ver en Historial'}
+          {guardando ? 'Guardando...' : (modoEdicion ? 'Actualizar Registro' : 'Guardar y Ver en Historial')}
         </button>
       </div>
     </div>

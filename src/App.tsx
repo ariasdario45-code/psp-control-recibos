@@ -6,6 +6,7 @@ import NuevoRegistro from './components/NuevoRegistro'
 import Admin from './components/Admin'
 import GestionUsuarios from './components/GestionUsuarios'
 import Dashboard from './components/Dashboard'
+import Configuracion from './components/Configuracion'
 import Login from './components/Login'
 
 function RutaPrivada({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,7 @@ function AppContenido() {
               <Route path="/historial" element={<HistorialTable />} />
               <Route path="/admin" element={<RutaAdmin><Admin /></RutaAdmin>} />
               <Route path="/usuarios" element={<RutaAdmin><GestionUsuarios /></RutaAdmin>} />
+              <Route path="/configuracion" element={<RutaAdmin><Configuracion /></RutaAdmin>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>

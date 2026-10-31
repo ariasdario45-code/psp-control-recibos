@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 import { 
   LayoutDashboard, 
   PlusCircle, 
@@ -15,6 +17,35 @@ import {
 export default function Sidebar() {
   const location = useLocation()
   const { usuario, logout, esAdmin } = useAuth()
+  const [config, setConfig] = useState({
+    nombre_empresa: 'PSP - Control de Recibos',
+    subtitulo_empresa: 'Operaciones Portuarias',
+    logo_url: '',
+    color_primario: '#1e40af',
+  })
+
+  useEffect(() => {
+    const cargarConfig = async () => {
+      try {
+        const { data } = await supabase
+          .from('configuracion')
+          .select('clave, valor')
+          .in('clave', ['nombre_empresa', 'subtitulo_empresa', 'logo_url', 'color_primario'])
+
+        if (data) {
+          const configObj: Record<string, string> = {}
+          data.forEach((item: any) => {
+            configObj[item.clave] = item.valor
+          })
+          setConfig(prev => ({ ...prev, ...configObj }))
+        }
+      } catch (error) {
+        console.error('Error al cargar config:', error)
+      }
+    }
+
+    cargarConfig()
+  }, [])
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Panel', path: '/' },
@@ -22,26 +53,41 @@ export default function Sidebar() {
     { icon: Clock, label: 'Historial', path: '/historial' },
     { icon: Ship, label: 'Información del Buque', path: '/' },
     { icon: Users, label: 'Usuarios', path: '/usuarios', soloAdmin: true },
-    { icon: Settings, label: 'Configuración', path: '/', soloAdmin: true },
+    { icon: Settings, label: 'Configuración', path: '/configuracion', soloAdmin: true },
     { icon: Database, label: 'Administración', path: '/admin', soloAdmin: true },
   ]
 
   const menuFiltrado = menuItems.filter(item => !item.soloAdmin || esAdmin)
 
   return (
-    <aside className="w-64 bg-slate-900 text-white min-h-screen flex flex-col">
+    <aside className="w-64 min-h-screen flex flex-col" style={{ backgroundColor: '#0f172a' }}>
+      {/* Logo y Nombre */}
       <div className="p-6 border-b border-slate-700">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Ship className="w-6 h-6" />
+        <Link to="/" className="flex items-center gap-3">
+          <div 
+            className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
+            style={{ backgroundColor: config.color_primario }}
+          >
+            {config.logo_url ? (
+              <img src={config.logo_url} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <Ship className="w-6 h-6 text-white" />
+            )}
           </div>
-          <div>
-            <h1 className="font-bold text-lg">PSP - Control de...</h1>
-            <p className="text-xs text-slate-400">Operaciones Portuarias</p>
+          <div className="min-w-0">
+            <h1 className="font-bold text-lg text-white truncate">
+              {config.nombre_empresa.length > 20 
+                ? config.nombre_empresa.substring(0, 20) + '...' 
+                : config.nombre_empresa}
+            </h1>
+            <p className="text-xs text-slate-400 truncate">
+              {config.subtitulo_empresa}
+            </p>
           </div>
-        </div>
+        </Link>
       </div>
 
+      {/* Menú */}
       <nav className="flex-1 p-4 space-y-1">
         {menuFiltrado.map((item, index) => (
           <Link
@@ -59,13 +105,14 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* Usuario */}
       <div className="p-4 border-t border-slate-700">
         <div className="flex items-center gap-3 px-4 py-3 mb-2">
           <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
             <User className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{usuario?.nombre}</p>
+            <p className="font-medium text-sm text-white truncate">{usuario?.nombre}</p>
             <p className="text-xs text-slate-400 truncate">{usuario?.codigo}</p>
             <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 ${
               esAdmin ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
@@ -76,7 +123,7 @@ export default function Sidebar() {
         </div>
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm font-medium"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm font-medium text-white"
         >
           <LogOut className="w-4 h-4" />
           Cerrar Sesión

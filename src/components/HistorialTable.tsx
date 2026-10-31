@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Download, Filter, Edit2, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Download, Filter, Edit2, Trash2, FileText } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as ExcelJS from 'exceljs'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 interface Detalle {
   id: number
@@ -26,10 +29,32 @@ interface Detalle {
   creado_en: string
 }
 
+interface Configuracion {
+  nombre_empresa: string
+  subtitulo_empresa: string
+  email_contacto: string
+  telefono_contacto: string
+  direccion_empresa: string
+  nit_empresa: string
+  logo_url: string
+  color_primario: string
+}
+
 export default function HistorialTable() {
+  const navigate = useNavigate()
   const [registros, setRegistros] = useState<Detalle[]>([])
   const [cargando, setCargando] = useState(true)
   const [mostrarFiltros, setMostrarFiltros] = useState(true)
+  const [config, setConfig] = useState<Configuracion>({
+    nombre_empresa: 'PSP - Control de Recibos',
+    subtitulo_empresa: 'Operaciones Portuarias',
+    email_contacto: '',
+    telefono_contacto: '',
+    direccion_empresa: '',
+    nit_empresa: '',
+    logo_url: '',
+    color_primario: '#1e40af',
+  })
   const [filtros, setFiltros] = useState({
     fecha: '',
     tipoCarga: '',
@@ -40,7 +65,26 @@ export default function HistorialTable() {
 
   useEffect(() => {
     cargarRegistros()
+    cargarConfiguracion()
   }, [])
+
+  const cargarConfiguracion = async () => {
+    try {
+      const { data } = await supabase
+        .from('configuracion')
+        .select('clave, valor')
+
+      if (data) {
+        const configObj: any = {}
+        data.forEach((item: any) => {
+          configObj[item.clave] = item.valor
+        })
+        setConfig(prev => ({ ...prev, ...configObj }))
+      }
+    } catch (error) {
+      console.error('Error al cargar config:', error)
+    }
+  }
 
   const cargarRegistros = async () => {
     setCargando(true)
@@ -59,6 +103,7 @@ export default function HistorialTable() {
 
       if (error) {
         console.error('Error al cargar:', error)
+        setCargando(false)
         return
       }
 
@@ -67,6 +112,7 @@ export default function HistorialTable() {
         planilla.planilla_detalles?.forEach((detalle: any) => {
           registrosAplanados.push({
             ...detalle,
+            planilla_id: planilla.id,
             fecha: planilla.fecha,
             tipo_carga: planilla.tipo_carga,
             turno: planilla.turno,
@@ -97,9 +143,8 @@ export default function HistorialTable() {
     setFiltros({ fecha: '', tipoCarga: '', turno: '', motonave: '', auxiliar: '' })
   }
 
-  // Eliminar registro
   const eliminarRegistro = async (id: number) => {
-    if (!confirm('¿Estás seguro de eliminar este registro? Esta acción no se puede deshacer.')) return
+    if (!confirm('¿Estás seguro de eliminar este registro?')) return
 
     try {
       const { error } = await supabase
@@ -109,7 +154,6 @@ export default function HistorialTable() {
 
       if (error) throw error
 
-      // Verificar si quedan detalles de esa planilla
       const registro = registros.find(r => r.id === id)
       if (registro) {
         const { data: detallesRestantes } = await supabase
@@ -132,10 +176,9 @@ export default function HistorialTable() {
     }
   }
 
-  // Editar registro (redirige a NuevoRegistro con los datos)
   const editarRegistro = (reg: Detalle) => {
-    // Guardar en localStorage para que NuevoRegistro lo cargue
     const datosEditar = {
+      planilla_id: reg.planilla_id,
       fecha: reg.fecha,
       tipoCarga: reg.tipo_carga,
       turno: reg.turno,
@@ -143,6 +186,7 @@ export default function HistorialTable() {
       auxiliar: reg.auxiliar,
       registros: [{
         id: 1,
+        id_detalle: reg.id,
         equipo: reg.equipo,
         proveedor: reg.proveedor,
         operador: reg.operador,
@@ -158,10 +202,228 @@ export default function HistorialTable() {
       }],
     }
     localStorage.setItem('planilla_editar', JSON.stringify(datosEditar))
-    window.location.href = '/nuevo'
+    navigate('/nuevo')
   }
 
-  // Exportar Excel con formato compacto mejorado
+  const exportarPDF = () => {
+    if (registrosFiltrados.length === 0) {
+      alert('No hay registros para exportar')
+      return
+    }
+
+    try {
+      const primeraPlanilla = registrosFiltrados[0]
+      
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'letter'
+      })
+      
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 15
+      let currentY = margin
+
+      // Logo (si existe)
+      if (config.logo_url && config.logo_url.startsWith('data:image')) {
+        try {
+          doc.addImage(config.logo_url, 'PNG', margin, currentY, 20, 20)
+        } catch (e) {
+          console.error('Error logo:', e)
+        }
+      }
+
+      // Encabezado empresa
+      const textX = config.logo_url ? margin + 25 : margin
+      doc.setFontSize(18)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 64, 175)
+      doc.text(config.nombre_empresa || 'PSP - Control de Recibos', textX, currentY + 8)
+
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(100, 100, 100)
+      doc.text(config.subtitulo_empresa || 'Operaciones Portuarias', textX, currentY + 15)
+
+      // Datos empresa a la derecha
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 80)
+      const rightX = pageWidth - margin
+      doc.text(`NIT: ${config.nit_empresa || 'N/A'}`, rightX, currentY + 5, { align: 'right' })
+      doc.text(`Tel: ${config.telefono_contacto || 'N/A'}`, rightX, currentY + 10, { align: 'right' })
+      doc.text(config.email_contacto || '', rightX, currentY + 15, { align: 'right' })
+      doc.text(config.direccion_empresa || '', rightX, currentY + 20, { align: 'right' })
+
+      currentY += 28
+
+      // Línea separadora
+      doc.setDrawColor(30, 64, 175)
+      doc.setLineWidth(0.8)
+      doc.line(margin, currentY, pageWidth - margin, currentY)
+      currentY += 10
+
+      // Título
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(0, 0, 0)
+      doc.text('PLANILLA DE CONTROL DE RECIBOS', pageWidth / 2, currentY, { align: 'center' })
+      currentY += 12
+
+      // Información de la planilla (2 columnas)
+      doc.setFontSize(11)
+      const infoY = currentY
+      const col1X = margin
+      const col2X = pageWidth / 2 + 10
+
+      // Columna 1
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Fecha:', col1X, infoY)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(0, 0, 0)
+      doc.text(primeraPlanilla?.fecha || 'N/A', col1X + 25, infoY)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Tipo de Carga:', col1X, infoY + 7)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(0, 0, 0)
+      doc.text(primeraPlanilla?.tipo_carga || 'N/A', col1X + 25, infoY + 7)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Turno:', col1X, infoY + 14)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(0, 0, 0)
+      doc.text(primeraPlanilla?.turno || 'N/A', col1X + 25, infoY + 14)
+
+      // Columna 2
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Motonave:', col2X, infoY)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(0, 0, 0)
+      doc.text(primeraPlanilla?.motonave || 'N/A', col2X + 25, infoY)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Auxiliar:', col2X, infoY + 7)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(0, 0, 0)
+      doc.text(primeraPlanilla?.auxiliar || 'N/A', col2X + 25, infoY + 7)
+
+      currentY = infoY + 22
+
+      // Tabla de registros
+      const tableData = registrosFiltrados.map((reg, idx) => [
+        (idx + 1).toString(),
+        reg.equipo,
+        reg.proveedor,
+        reg.operador,
+        reg.estibador || '-',
+        reg.cedula || '-',
+        reg.fase,
+        reg.h_inicial.toString(),
+        reg.h_final.toString(),
+        reg.hora_inicio,
+        reg.hora_fin,
+        reg.n_recibo.toString(),
+        reg.observaciones,
+      ])
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['N°', 'Equipo', 'Proveedor', 'Operador', 'Estibador', 'Cédula', 'Fase', 'H.Inicial', 'H.Final', 'Hora Inicial', 'Hora Final', 'N° Recibo', 'Observaciones']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [30, 64, 175],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8,
+          halign: 'center',
+          valign: 'middle',
+        },
+        bodyStyles: {
+          fontSize: 7,
+          textColor: [50, 50, 50],
+          valign: 'middle',
+        },
+        alternateRowStyles: {
+          fillColor: [245, 247, 250],
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { cellWidth: 32 },
+          2: { cellWidth: 42 },
+          3: { cellWidth: 32 },
+          4: { cellWidth: 22 },
+          5: { cellWidth: 18, halign: 'center' },
+          6: { cellWidth: 18, halign: 'center' },
+          7: { cellWidth: 16, halign: 'center' },
+          8: { cellWidth: 16, halign: 'center' },
+          9: { cellWidth: 20, halign: 'center' },
+          10: { cellWidth: 20, halign: 'center' },
+          11: { cellWidth: 16, halign: 'center' },
+          12: { cellWidth: 38 },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      // Totales
+      const finalY = (doc as any).lastAutoTable.finalY + 12
+
+      const totalHoras = registrosFiltrados.reduce((sum, reg) => {
+        return sum + (reg.h_final - reg.h_inicial)
+      }, 0)
+
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 64, 175)
+      doc.text(`Total de Registros: ${registrosFiltrados.length}`, margin, finalY)
+      doc.text(`Total Horas Trabajadas: ${totalHoras.toFixed(1)} horas`, margin, finalY + 7)
+
+      // Firmas
+      const firmaY = finalY + 30
+      const firmaWidth = 70
+
+      doc.setDrawColor(100, 100, 100)
+      doc.setLineWidth(0.3)
+
+      doc.line(margin, firmaY, margin + firmaWidth, firmaY)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Firma Auxiliar', margin, firmaY + 5)
+      doc.text(primeraPlanilla?.auxiliar || '', margin, firmaY + 10)
+
+      doc.line(pageWidth - margin - firmaWidth, firmaY, pageWidth - margin, firmaY)
+      doc.text('Firma Administrador', pageWidth - margin - firmaWidth, firmaY + 5)
+      doc.text(config.nombre_empresa, pageWidth - margin - firmaWidth, firmaY + 10)
+
+      // Pie de página
+      const footerY = pageHeight - 8
+      doc.setFontSize(7)
+      doc.setTextColor(150, 150, 150)
+      doc.text(
+        `Documento generado el ${new Date().toLocaleDateString('es-CO')} a las ${new Date().toLocaleTimeString('es-CO')} - ${config.nombre_empresa}`,
+        pageWidth / 2,
+        footerY,
+        { align: 'center' }
+      )
+
+      // Guardar
+      const nombreArchivo = `Planilla_${primeraPlanilla?.fecha || new Date().toISOString().split('T')[0]}.pdf`
+      doc.save(nombreArchivo)
+      
+      console.log('✅ PDF generado exitosamente')
+    } catch (error: any) {
+      console.error('❌ Error al generar PDF:', error)
+      alert('❌ Error al generar PDF: ' + error.message)
+    }
+  }
+
   const exportarExcel = async () => {
     if (registrosFiltrados.length === 0) {
       alert('No hay registros para exportar')
@@ -173,7 +435,6 @@ export default function HistorialTable() {
 
     const primeraPlanilla = registrosFiltrados[0]
 
-    // === FILA 1: Turno | Motonave | Auxiliar ===
     worksheet.getCell('A1').value = 'Turno:'
     worksheet.getCell('A1').font = { name: 'Arial', size: 11, bold: true }
     worksheet.getCell('B1').value = primeraPlanilla?.turno || ''
@@ -189,7 +450,6 @@ export default function HistorialTable() {
     worksheet.getCell('J1').value = primeraPlanilla?.auxiliar || ''
     worksheet.getCell('J1').font = { name: 'Arial', size: 11, bold: true }
 
-    // === FILA 2: Fecha | Tipo de Carga (centrado) ===
     worksheet.getCell('A2').value = 'Fecha:'
     worksheet.getCell('A2').font = { name: 'Arial', size: 11, bold: true }
     worksheet.getCell('B2').value = primeraPlanilla?.fecha || ''
@@ -201,7 +461,6 @@ export default function HistorialTable() {
     celdaTipo.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF1F4E79' } }
     celdaTipo.alignment = { horizontal: 'center', vertical: 'middle' }
 
-    // === FILA 3: Encabezados de tabla ===
     const filaEncabezados = 3
     const encabezados = [
       'N°', 'Equipo', 'Proveedor', 'Operador', 'Estibador', 'Cédula',
@@ -227,7 +486,6 @@ export default function HistorialTable() {
       }
     })
 
-    // === DATOS (desde fila 4) ===
     registrosFiltrados.forEach((reg, idx) => {
       const rowNum = filaEncabezados + 1 + idx
       const filaDatos = worksheet.getRow(rowNum)
@@ -261,34 +519,21 @@ export default function HistorialTable() {
           right: { style: 'thin', color: { argb: 'FFB4B4B4' } },
         }
 
-        // Centrar columnas numéricas
         if (colIdx === 0 || colIdx === 7 || colIdx === 8 || colIdx === 9 || colIdx === 10 || colIdx === 11) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' }
         }
       })
     })
 
-    // === ANCHOS DE COLUMNA ===
     const anchos = [
-      { width: 6 },   // N°
-      { width: 22 },  // Equipo
-      { width: 35 },  // Proveedor
-      { width: 28 },  // Operador
-      { width: 22 },  // Estibador
-      { width: 14 },  // Cédula
-      { width: 12 },  // Fase
-      { width: 12 },  // H.Inicial
-      { width: 12 },  // H.Final
-      { width: 14 },  // Hora Inicial
-      { width: 14 },  // Hora Final
-      { width: 12 },  // N° Recibo
-      { width: 30 },  // Observaciones
+      { width: 6 }, { width: 22 }, { width: 35 }, { width: 28 },
+      { width: 22 }, { width: 14 }, { width: 12 }, { width: 12 },
+      { width: 12 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 30 },
     ]
     anchos.forEach((ancho, idx) => {
       worksheet.getColumn(idx + 1).width = ancho.width
     })
 
-    // === GENERAR ARCHIVO ===
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -318,6 +563,13 @@ export default function HistorialTable() {
             >
               <Filter className="w-4 h-4" />
               {mostrarFiltros ? 'Ocultar filtros' : 'Mostrar filtros'}
+            </button>
+            <button
+              onClick={exportarPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+            >
+              <FileText className="w-4 h-4" />
+              Exportar PDF
             </button>
             <button
               onClick={exportarExcel}
