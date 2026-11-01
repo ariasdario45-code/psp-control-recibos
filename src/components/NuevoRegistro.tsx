@@ -73,11 +73,9 @@ export default function NuevoRegistro() {
   const [subiendoImagen, setSubiendoImagen] = useState(false)
   const [mostrandoPreview, setMostrandoPreview] = useState<Registro | null>(null)
 
-  // ✅ AUTOMATIZACIÓN DE FECHA Y TURNO AL CARGAR
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0]
     setFecha(hoy)
-    
     const horaActual = new Date().getHours()
     const turnoDetectado = (horaActual >= 6 && horaActual < 18) ? 'DIA' : 'NOCHE'
     setTurno(turnoDetectado)
@@ -111,9 +109,7 @@ export default function NuevoRegistro() {
         setAuxiliares(dataAuxiliares?.map(a => a.nombre) || [])
         setTiposCarga(dataTiposCarga?.map(t => t.nombre) || [])
         setEstibadores(dataEstibadores?.map(e => e.nombre) || [])
-      } catch (error) {
-        console.error('Error al cargar datos maestros:', error)
-      }
+      } catch (error) { console.error('Error al cargar datos maestros:', error) }
     }
     cargarDatosMaestros()
   }, [])
@@ -137,7 +133,6 @@ export default function NuevoRegistro() {
       localStorage.removeItem('planilla_editar')
       return
     }
-
     if (!modoEdicion && !datosEditCargados.current) {
       const datosGuardados = localStorage.getItem('planilla_actual')
       if (datosGuardados) {
@@ -169,6 +164,7 @@ export default function NuevoRegistro() {
     }))
   }
 
+  // ✅ CORRECCIÓN: NO limpiar imagenFile aquí, solo los datos del formulario
   const guardarRegistro = () => {
     if (!registroActual.operador && !registroActual.estibador) {
       alert('Debes registrar al menos un Operador o un Estibador')
@@ -187,9 +183,9 @@ export default function NuevoRegistro() {
       setRegistros(prev => [...prev, { ...registroActual, id: nuevoId }])
     }
 
+    // Solo limpiar los datos del formulario, NO la imagen
     setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
-    setImagenPreview('')
-    setImagenFile(null)
+    // ❌ ELIMINADO: setImagenPreview('') y setImagenFile(null)
   }
 
   const editarRegistroLocal = (registro: Registro) => {
@@ -226,34 +222,16 @@ export default function NuevoRegistro() {
     }
   }
 
-  // ✅ FUNCIÓN DE SUBIDA CON DIAGNÓSTICO COMPLETO
   const subirImagen = async (file: File): Promise<string | null> => {
     try {
       setSubiendoImagen(true)
       const fileName = `recibo_${Date.now()}_${file.name.replace(/\s+/g, '_')}`
-      
       console.log('📤 Subiendo imagen:', { fileName, bucket: 'evidencias', fileSize: file.size })
-      
-      const { data, error } = await supabase.storage
-        .from('evidencias')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
-      
-      if (error) {
-        console.error('❌ Error al subir a Storage:', error)
-        throw error
-      }
-      
+      const { data, error } = await supabase.storage.from('evidencias').upload(fileName, file, { cacheControl: '3600', upsert: false })
+      if (error) { console.error('❌ Error al subir a Storage:', error); throw error }
       console.log('✅ Archivo subido:', data)
-      
-      const { data: urlData } = supabase.storage
-        .from('evidencias')
-        .getPublicUrl(fileName)
-      
+      const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(fileName)
       console.log('🔗 URL pública:', urlData.publicUrl)
-      
       setSubiendoImagen(false)
       return urlData.publicUrl
     } catch (error: any) {
@@ -293,15 +271,8 @@ export default function NuevoRegistro() {
 
       if (!modoEdicion) {
         console.log('💾 Creando planilla...', { fecha, tipoCarga, turno, motonave, auxiliar })
-        const { data: planillaData, error: planillaError } = await supabase
-          .from('planillas')
-          .insert([{ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }])
-          .select()
-        
-        if (planillaError) {
-          console.error('❌ Error al crear planilla:', planillaError)
-          throw planillaError
-        }
+        const { data: planillaData, error: planillaError } = await supabase.from('planillas').insert([{ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }]).select()
+        if (planillaError) { console.error('❌ Error al crear planilla:', planillaError); throw planillaError }
         planillaId = planillaData[0].id
         console.log('✅ Planilla creada con ID:', planillaId)
 
@@ -325,16 +296,8 @@ export default function NuevoRegistro() {
         }))
         
         console.log('💾 Insertando detalles:', detalles)
-        
-        const { data: detallesData, error: detallesError } = await supabase
-          .from('planilla_detalles')
-          .insert(detalles)
-          .select()
-        
-        if (detallesError) {
-          console.error('❌ Error al insertar detalles:', detallesError)
-          throw detallesError
-        }
+        const { data: detallesData, error: detallesError } = await supabase.from('planilla_detalles').insert(detalles).select()
+        if (detallesError) { console.error('❌ Error al insertar detalles:', detallesError); throw detallesError }
         detalleId = detallesData[0].id
         console.log('✅ Detalle creado con ID:', detalleId)
       } else {
@@ -347,11 +310,10 @@ export default function NuevoRegistro() {
           estib_hora_salida: detalle.estib_hora_salida || null, estib_observaciones: detalle.estib_observaciones || null,
         }).eq('id', detalleId)
         if (updateError) throw updateError
-
         await supabase.from('planillas').update({ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }).eq('id', planillaId)
       }
 
-      // ✅ GUARDAR IMAGEN CON DIAGNÓSTICO COMPLETO
+      // ✅ GUARDAR IMAGEN - Ahora SÍ funciona porque no se limpió antes
       console.log('🔍 Verificando imagen...', {
         tieneImagen: !!imagenFile,
         planillaId,
@@ -370,16 +332,7 @@ export default function NuevoRegistro() {
             detalle_id: detalleId,
             imagen_url: imageUrl
           })
-          
-          const { data, error: evidenciaError } = await supabase
-            .from('evidencias')
-            .insert([{ 
-              planilla_id: planillaId, 
-              detalle_id: detalleId, 
-              imagen_url: imageUrl 
-            }])
-            .select()
-          
+          const { data, error: evidenciaError } = await supabase.from('evidencias').insert([{ planilla_id: planillaId, detalle_id: detalleId, imagen_url: imageUrl }]).select()
           if (evidenciaError) {
             console.error('❌ Error al guardar evidencia:', evidenciaError)
             alert('⚠️ Error al guardar imagen: ' + evidenciaError.message)
@@ -496,22 +449,22 @@ export default function NuevoRegistro() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">H.Inicial</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">H.Inicial (Horómetro)</label>
             <input type="number" name="hInicial" value={registroActual.hInicial || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0" step="0.1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">H.Final</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">H.Final (Horómetro)</label>
             <input type="number" name="hFinal" value={registroActual.hFinal || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0" step="0.1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Hora Inicial</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Hora Inicial (Reloj)</label>
             <select name="horaInicio" value={registroActual.horaInicio} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Hora Final</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Hora Final (Reloj)</label>
             <select name="horaFin" value={registroActual.horaFin} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
