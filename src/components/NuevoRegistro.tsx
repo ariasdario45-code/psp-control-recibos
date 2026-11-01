@@ -28,7 +28,6 @@ interface Registro {
   horaFin: string
   nRecibo: number
   observaciones: string
-  // Estibador simplificado
   estibador: string
   estib_hora_llegada: string
   estib_hora_salida: string
@@ -65,10 +64,7 @@ export default function NuevoRegistro() {
     id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
     fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
     nRecibo: 0, observaciones: '', 
-    estibador: '',
-    estib_hora_llegada: '',
-    estib_hora_salida: '',
-    estib_observaciones: '',
+    estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '',
   })
 
   const [editandoId, setEditandoId] = useState<number | null>(null)
@@ -77,19 +73,23 @@ export default function NuevoRegistro() {
   const [subiendoImagen, setSubiendoImagen] = useState(false)
   const [mostrandoPreview, setMostrandoPreview] = useState<Registro | null>(null)
 
+  // ✅ AUTOMATIZACIÓN DE FECHA Y TURNO AL CARGAR
+  useEffect(() => {
+    const hoy = new Date().toISOString().split('T')[0]
+    setFecha(hoy)
+    
+    const horaActual = new Date().getHours()
+    const turnoDetectado = (horaActual >= 6 && horaActual < 18) ? 'DIA' : 'NOCHE'
+    setTurno(turnoDetectado)
+  }, [])
+
   useEffect(() => {
     const cargarDatosMaestros = async () => {
       try {
         const [
-          { data: dataEquipos },
-          { data: dataProveedores },
-          { data: dataOperadores },
-          { data: dataFases },
-          { data: dataTurnos },
-          { data: dataMotonaves },
-          { data: dataAuxiliares },
-          { data: dataTiposCarga },
-          { data: dataEstibadores },
+          { data: dataEquipos }, { data: dataProveedores }, { data: dataOperadores },
+          { data: dataFases }, { data: dataTurnos }, { data: dataMotonaves },
+          { data: dataAuxiliares }, { data: dataTiposCarga }, { data: dataEstibadores },
         ] = await Promise.all([
           supabase.from('equipos').select('nombre'),
           supabase.from('proveedores').select('nombre'),
@@ -115,17 +115,14 @@ export default function NuevoRegistro() {
         console.error('Error al cargar datos maestros:', error)
       }
     }
-
     cargarDatosMaestros()
   }, [])
 
   useEffect(() => {
     if (tiposCarga.length === 0) return
-    
     const datosEditar = localStorage.getItem('planilla_editar')
     if (datosEditar && !datosEditCargados.current) {
       const datos = JSON.parse(datosEditar)
-      
       setModoEdicion(true)
       setIdPlanillaEditar(datos.planilla_id || null)
       setIdDetalleEditar(datos.registros?.[0]?.id_detalle || null)
@@ -135,11 +132,7 @@ export default function NuevoRegistro() {
       setMotonave(datos.motonave || '')
       setAuxiliar(datos.auxiliar || '')
       setRegistros(datos.registros || [])
-      
-      if (datos.registros && datos.registros.length > 0) {
-        setRegistroActual(datos.registros[0])
-      }
-      
+      if (datos.registros && datos.registros.length > 0) setRegistroActual(datos.registros[0])
       datosEditCargados.current = true
       localStorage.removeItem('planilla_editar')
       return
@@ -161,11 +154,10 @@ export default function NuevoRegistro() {
 
   useEffect(() => {
     if (!modoEdicion) {
-      const datos = {
+      localStorage.setItem('planilla_actual', JSON.stringify({
         fecha, tipoCarga, turno, motonave, auxiliar, registros,
         fechaActualizacion: new Date().toISOString(),
-      }
-      localStorage.setItem('planilla_actual', JSON.stringify(datos))
+      }))
     }
   }, [fecha, tipoCarga, turno, motonave, auxiliar, registros, modoEdicion])
 
@@ -173,36 +165,29 @@ export default function NuevoRegistro() {
     const { name, value } = e.target
     setRegistroActual(prev => ({
       ...prev,
-      [name]: name === 'id' || name === 'hInicial' || name === 'hFinal' || name === 'nRecibo' 
-        ? parseFloat(value) || 0 : value,
+      [name]: name === 'id' || name === 'hInicial' || name === 'hFinal' || name === 'nRecibo' ? parseFloat(value) || 0 : value,
     }))
   }
 
   const guardarRegistro = () => {
-    if (!registroActual.equipo || !registroActual.operador) {
-      alert('Por favor completa al menos Equipo y Operador')
+    if (!registroActual.operador && !registroActual.estibador) {
+      alert('Debes registrar al menos un Operador o un Estibador')
+      return
+    }
+    if (!registroActual.equipo && registroActual.operador) {
+      alert('Por favor selecciona el Equipo para el Operador')
       return
     }
 
     if (editandoId !== null) {
-      setRegistros(prev =>
-        prev.map(r => (r.id === editandoId ? { ...registroActual, id: editandoId } : r))
-      )
+      setRegistros(prev => prev.map(r => (r.id === editandoId ? { ...registroActual, id: editandoId } : r)))
       setEditandoId(null)
     } else {
       const nuevoId = registros.length > 0 ? Math.max(...registros.map(r => r.id)) + 1 : 1
       setRegistros(prev => [...prev, { ...registroActual, id: nuevoId }])
     }
 
-    setRegistroActual({
-      id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
-      fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-      nRecibo: 0, observaciones: '', 
-      estibador: '',
-      estib_hora_llegada: '',
-      estib_hora_salida: '',
-      estib_observaciones: '',
-    })
+    setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
     setImagenPreview('')
     setImagenFile(null)
   }
@@ -218,15 +203,7 @@ export default function NuevoRegistro() {
       setRegistros(prev => prev.filter(r => r.id !== id))
       if (editandoId === id) {
         setEditandoId(null)
-        setRegistroActual({
-          id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
-          fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-          nRecibo: 0, observaciones: '', 
-          estibador: '',
-          estib_hora_llegada: '',
-          estib_hora_salida: '',
-          estib_observaciones: '',
-        })
+        setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
       }
     }
   }
@@ -241,15 +218,7 @@ export default function NuevoRegistro() {
       datosEditCargados.current = false
       setFecha(''); setTipoCarga(''); setTurno(''); setMotonave(''); setAuxiliar('')
       setRegistros([])
-      setRegistroActual({
-        id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
-        fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-        nRecibo: 0, observaciones: '', 
-        estibador: '',
-        estib_hora_llegada: '',
-        estib_hora_salida: '',
-        estib_observaciones: '',
-      })
+      setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
       setEditandoId(null)
       setImagenPreview('')
       setImagenFile(null)
@@ -257,31 +226,38 @@ export default function NuevoRegistro() {
     }
   }
 
+  // ✅ FUNCIÓN DE SUBIDA CON DIAGNÓSTICO COMPLETO
   const subirImagen = async (file: File): Promise<string | null> => {
     try {
       setSubiendoImagen(true)
-      const timestamp = Date.now()
-      const fileName = `recibo_${timestamp}_${file.name}`
+      const fileName = `recibo_${Date.now()}_${file.name.replace(/\s+/g, '_')}`
       
-      const { data, error } = await supabase
-        .storage
-        .from('recibos')
+      console.log('📤 Subiendo imagen:', { fileName, bucket: 'evidencias', fileSize: file.size })
+      
+      const { data, error } = await supabase.storage
+        .from('evidencias')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: false
         })
-
-      if (error) throw error
-
-      const { data: urlData } = supabase
-        .storage
-        .from('recibos')
+      
+      if (error) {
+        console.error('❌ Error al subir a Storage:', error)
+        throw error
+      }
+      
+      console.log('✅ Archivo subido:', data)
+      
+      const { data: urlData } = supabase.storage
+        .from('evidencias')
         .getPublicUrl(fileName)
-
+      
+      console.log('🔗 URL pública:', urlData.publicUrl)
+      
       setSubiendoImagen(false)
       return urlData.publicUrl
     } catch (error: any) {
-      console.error('Error al subir imagen:', error)
+      console.error('❌ Error completo al subir imagen:', error)
       alert('Error al subir imagen: ' + error.message)
       setSubiendoImagen(false)
       return null
@@ -291,23 +267,11 @@ export default function NuevoRegistro() {
   const handleImagenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      alert('Solo se permiten archivos de imagen')
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no debe superar 5MB')
-      return
-    }
-
+    if (!file.type.startsWith('image/')) { alert('Solo se permiten archivos de imagen'); return }
+    if (file.size > 5 * 1024 * 1024) { alert('La imagen no debe superar 5MB'); return }
     const reader = new FileReader()
-    reader.onloadend = () => {
-      setImagenPreview(reader.result as string)
-    }
+    reader.onloadend = () => setImagenPreview(reader.result as string)
     reader.readAsDataURL(file)
-    
     setImagenFile(file)
   }
 
@@ -316,137 +280,133 @@ export default function NuevoRegistro() {
       alert('Por favor completa todos los campos del encabezado')
       return
     }
-
     const datosAGuardar = modoEdicion ? [registroActual] : registros
-
-    if (datosAGuardar.length === 0) {
-      alert('Agrega al menos un registro antes de guardar')
-      return
-    }
-
+    if (datosAGuardar.length === 0) { alert('Agrega al menos un registro antes de guardar'); return }
     if (modoEdicion && (!idPlanillaEditar || !idDetalleEditar)) {
-      console.error('IDs faltantes:', { idPlanillaEditar, idDetalleEditar })
-      alert('Error: No se pudieron cargar los IDs del registro.')
-      return
+      alert('Error: No se pudieron cargar los IDs del registro.'); return
     }
 
     setGuardando(true)
-
     try {
       let planillaId = idPlanillaEditar
       let detalleId = idDetalleEditar
 
       if (!modoEdicion) {
+        console.log('💾 Creando planilla...', { fecha, tipoCarga, turno, motonave, auxiliar })
         const { data: planillaData, error: planillaError } = await supabase
           .from('planillas')
-          .insert([{
-            fecha: fecha,
-            tipo_carga: tipoCarga,
-            turno: turno,
-            motonave: motonave,
-            auxiliar: auxiliar,
-          }])
+          .insert([{ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }])
           .select()
-
-        if (planillaError) throw planillaError
+        
+        if (planillaError) {
+          console.error('❌ Error al crear planilla:', planillaError)
+          throw planillaError
+        }
         planillaId = planillaData[0].id
+        console.log('✅ Planilla creada con ID:', planillaId)
 
         const detalles = datosAGuardar.map(r => ({
           planilla_id: planillaId,
           equipo: r.equipo,
           proveedor: r.proveedor,
-          operador: r.operador,
-          cedula: r.cedula,
-          fase: r.fase,
-          h_inicial: r.hInicial,
-          h_final: r.hFinal,
-          hora_inicio: r.horaInicio,
-          hora_fin: r.horaFin,
-          n_recibo: r.nRecibo,
-          observaciones: r.observaciones,
-          estibador: r.estibador,
+          operador: r.operador || null,
+          cedula: r.cedula || null,
+          fase: r.fase || null,
+          h_inicial: r.hInicial || 0,
+          h_final: r.hFinal || 0,
+          hora_inicio: r.horaInicio || null,
+          hora_fin: r.horaFin || null,
+          n_recibo: r.nRecibo || null,
+          observaciones: r.observaciones || null,
+          estibador: r.estibador || null,
           estib_hora_llegada: r.estib_hora_llegada || null,
           estib_hora_salida: r.estib_hora_salida || null,
           estib_observaciones: r.estib_observaciones || null,
         }))
-
+        
+        console.log('💾 Insertando detalles:', detalles)
+        
         const { data: detallesData, error: detallesError } = await supabase
           .from('planilla_detalles')
           .insert(detalles)
           .select()
-
-        if (detallesError) throw detallesError
+        
+        if (detallesError) {
+          console.error('❌ Error al insertar detalles:', detallesError)
+          throw detallesError
+        }
         detalleId = detallesData[0].id
+        console.log('✅ Detalle creado con ID:', detalleId)
       } else {
         const detalle = datosAGuardar[0]
-        
-        const { error: updateError } = await supabase
-          .from('planilla_detalles')
-          .update({
-            equipo: detalle.equipo,
-            proveedor: detalle.proveedor,
-            operador: detalle.operador,
-            cedula: detalle.cedula,
-            fase: detalle.fase,
-            h_inicial: detalle.hInicial,
-            h_final: detalle.hFinal,
-            hora_inicio: detalle.horaInicio,
-            hora_fin: detalle.horaFin,
-            n_recibo: detalle.nRecibo,
-            observaciones: detalle.observaciones,
-            estibador: detalle.estibador,
-            estib_hora_llegada: detalle.estib_hora_llegada || null,
-            estib_hora_salida: detalle.estib_hora_salida || null,
-            estib_observaciones: detalle.estib_observaciones || null,
-          })
-          .eq('id', detalleId)
-
+        const { error: updateError } = await supabase.from('planilla_detalles').update({
+          equipo: detalle.equipo, proveedor: detalle.proveedor, operador: detalle.operador || null, cedula: detalle.cedula || null,
+          fase: detalle.fase || null, h_inicial: detalle.hInicial || 0, h_final: detalle.hFinal || 0, hora_inicio: detalle.horaInicio || null,
+          hora_fin: detalle.horaFin || null, n_recibo: detalle.nRecibo || null, observaciones: detalle.observaciones || null,
+          estibador: detalle.estibador || null, estib_hora_llegada: detalle.estib_hora_llegada || null,
+          estib_hora_salida: detalle.estib_hora_salida || null, estib_observaciones: detalle.estib_observaciones || null,
+        }).eq('id', detalleId)
         if (updateError) throw updateError
 
-        const { error: planillaError } = await supabase
-          .from('planillas')
-          .update({
-            fecha: fecha,
-            tipo_carga: tipoCarga,
-            turno: turno,
-            motonave: motonave,
-            auxiliar: auxiliar,
-          })
-          .eq('id', planillaId)
-
-        if (planillaError) throw planillaError
+        await supabase.from('planillas').update({ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }).eq('id', planillaId)
       }
 
+      // ✅ GUARDAR IMAGEN CON DIAGNÓSTICO COMPLETO
+      console.log('🔍 Verificando imagen...', {
+        tieneImagen: !!imagenFile,
+        planillaId,
+        detalleId,
+        nombreArchivo: imagenFile?.name
+      })
+
       if (imagenFile && planillaId && detalleId) {
+        console.log('📸 Subiendo imagen a Supabase Storage...')
         const imageUrl = await subirImagen(imagenFile)
+        console.log('📸 URL obtenida:', imageUrl)
         
         if (imageUrl) {
-          const { error: evidenciaError } = await supabase
+          console.log('💾 Guardando en tabla evidencias:', {
+            planilla_id: planillaId,
+            detalle_id: detalleId,
+            imagen_url: imageUrl
+          })
+          
+          const { data, error: evidenciaError } = await supabase
             .from('evidencias')
-            .insert([{
-              planilla_id: planillaId,
-              detalle_id: detalleId,
-              url_imagen: imageUrl,
+            .insert([{ 
+              planilla_id: planillaId, 
+              detalle_id: detalleId, 
+              imagen_url: imageUrl 
             }])
-
+            .select()
+          
           if (evidenciaError) {
-            console.error('Error al guardar evidencia:', evidenciaError)
+            console.error('❌ Error al guardar evidencia:', evidenciaError)
+            alert('⚠️ Error al guardar imagen: ' + evidenciaError.message)
+          } else {
+            console.log('✅ Evidencia guardada correctamente:', data)
           }
+        } else {
+          console.error('❌ No se obtuvo URL de imagen')
+          alert('⚠️ La imagen no se pudo subir a Supabase')
         }
+      } else {
+        console.log('⚠️ No se guardará imagen porque:', {
+          tieneImagen: !!imagenFile,
+          tienePlanillaId: !!planillaId,
+          tieneDetalleId: !!detalleId
+        })
       }
 
       alert('Planilla guardada exitosamente' + (imagenFile ? ' con evidencia fotográfica' : ''))
-      
       localStorage.removeItem('planilla_actual')
       localStorage.removeItem('planilla_editar')
       datosEditCargados.current = false
-      
-      window.location.href = '/historial'
+      navigate('/historial')
     } catch (error: any) {
-      console.error('Error al guardar:', error)
+      console.error('❌ Error al guardar:', error)
       alert('Error al guardar: ' + error.message)
     }
-
     setGuardando(false)
   }
 
@@ -454,76 +414,45 @@ export default function NuevoRegistro() {
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-900">
-            {modoEdicion ? 'Editar Registro de Planilla' : 'Nuevo Registro de Planilla'}
-          </h2>
-          <button
-            onClick={limpiarTodo}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-          >
-            <Trash2 className="w-4 h-4" />
-            Limpiar Todo
+          <h2 className="text-2xl font-bold text-slate-900">{modoEdicion ? 'Editar Registro de Planilla' : 'Nuevo Registro de Planilla'}</h2>
+          <button onClick={limpiarTodo} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
+            <Trash2 className="w-4 h-4" /> Limpiar Todo
           </button>
         </div>
-
         {modoEdicion && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
-            ⚠️ Estás en modo edición. Los campos están pre-llenados. Modifica solo lo que necesites cambiar.
-            <br />
-            <span className="text-xs">ID Planilla: {idPlanillaEditar} | ID Detalle: {idDetalleEditar}</span>
+            ⚠️ Estás en modo edición. Modifica solo lo necesario.
           </div>
         )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Fecha *</label>
-            <input
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            />
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Carga *</label>
-            <select
-              value={tipoCarga}
-              onChange={(e) => setTipoCarga(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {tiposCarga.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Turno *</label>
-            <select
-              value={turno}
-              onChange={(e) => setTurno(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Seleccionar</option>
-              {turnos.map(t => <option key={t} value={t}>{t}</option>)}
+            <select value={turno} onChange={(e) => setTurno(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50">
+              <option value="DIA">DIA (06:00 - 17:59)</option>
+              <option value="NOCHE">NOCHE (18:00 - 05:59)</option>
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Motonave *</label>
-            <select
-              value={motonave}
-              onChange={(e) => setMotonave(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={motonave} onChange={(e) => setMotonave(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {motonaves.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Auxiliar *</label>
-            <select
-              value={auxiliar}
-              onChange={(e) => setAuxiliar(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={auxiliar} onChange={(e) => setAuxiliar(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {auxiliares.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
@@ -532,113 +461,81 @@ export default function NuevoRegistro() {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">
-          {modoEdicion ? 'Datos del Registro (modifica lo necesario)' : 'Agregar Nuevo Registro'}
-        </h3>
-
-        {/* FORMULARIO DEL OPERADOR - SIN CAMPO ESTIBADOR */}
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">{modoEdicion ? 'Datos del Registro' : 'Agregar Nuevo Registro'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Equipo *</label>
-            <select name="equipo" value={registroActual.equipo} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            <select name="equipo" value={registroActual.equipo} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {equipos.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Proveedor</label>
-            <select name="proveedor" value={registroActual.proveedor} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            <select name="proveedor" value={registroActual.proveedor} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Operador *</label>
-            <select name="operador" value={registroActual.operador} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Seleccionar</option>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Operador</label>
+            <select name="operador" value={registroActual.operador} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+              <option value="">Seleccionar (Opcional)</option>
               {operadores.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Cédula</label>
-            <input type="text" name="cedula" value={registroActual.cedula} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="N/A o número" />
+            <input type="text" name="cedula" value={registroActual.cedula} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="N/A o número" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Fase</label>
-            <select name="fase" value={registroActual.fase} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            <select name="fase" value={registroActual.fase} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {fases.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">H.Inicial</label>
-            <input type="number" name="hInicial" value={registroActual.hInicial || ''} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="0" step="0.1" />
+            <input type="number" name="hInicial" value={registroActual.hInicial || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0" step="0.1" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">H.Final</label>
-            <input type="number" name="hFinal" value={registroActual.hFinal || ''} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="0" step="0.1" />
+            <input type="number" name="hFinal" value={registroActual.hFinal || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0" step="0.1" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Hora Inicial</label>
-            <select name="horaInicio" value={registroActual.horaInicio} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            <select name="horaInicio" value={registroActual.horaInicio} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Hora Final</label>
-            <select name="horaFin" value={registroActual.horaFin} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            <select name="horaFin" value={registroActual.horaFin} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">N° Recibo</label>
-            <input type="number" name="nRecibo" value={registroActual.nRecibo || ''} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="0" />
+            <input type="number" name="nRecibo" value={registroActual.nRecibo || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0" />
           </div>
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones Operador</label>
-            <input type="text" name="observaciones" value={registroActual.observaciones} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="Detalles del operador..." />
+            <input type="text" name="observaciones" value={registroActual.observaciones} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="Detalles del operador..." />
           </div>
         </div>
 
-        {/* SECCIÓN ESTIBADOR SIMPLIFICADA - SOLO 4 CAMPOS */}
         <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
           <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2 text-sm">
-            <span className="w-2 h-2 bg-green-600 rounded-full"></span>
-            Registro del Estibador (Opcional)
+            <span className="w-2 h-2 bg-green-600 rounded-full"></span> Registro del Estibador (Independiente)
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Nombre del Estibador</label>
-              <input
-                type="text"
-                list="lista-estibadores"
-                name="estibador"
-                value={registroActual.estibador}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                placeholder="Seleccionar o escribir..."
-              />
-              <datalist id="lista-estibadores">
-                {estibadores.map(e => <option key={e} value={e} />)}
-              </datalist>
+              <input type="text" list="lista-estibadores" name="estibador" value={registroActual.estibador} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="Seleccionar o escribir..." />
+              <datalist id="lista-estibadores">{estibadores.map(e => <option key={e} value={e} />)}</datalist>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Hora Llegada</label>
@@ -656,32 +553,19 @@ export default function NuevoRegistro() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Observaciones Estibador</label>
-              <input
-                type="text"
-                name="estib_observaciones"
-                value={registroActual.estib_observaciones || ''}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                placeholder="1H ALIMENTACION, DETENCION, etc."
-              />
+              <input type="text" name="estib_observaciones" value={registroActual.estib_observaciones || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="1H ALIMENTACION, DETENCION, etc." />
             </div>
           </div>
         </div>
 
-        {/* IMAGEN/EVIDENCIA */}
         <div className="mt-6 p-4 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Camera className="w-5 h-5 text-blue-600" />
               <h4 className="font-semibold text-slate-900">Evidencia Fotográfica del Recibo</h4>
             </div>
-            {imagenPreview && (
-              <button onClick={() => { setImagenPreview(''); setImagenFile(null) }} className="text-red-600 hover:text-red-800 text-sm">
-                Quitar imagen
-              </button>
-            )}
+            {imagenPreview && <button onClick={() => { setImagenPreview(''); setImagenFile(null) }} className="text-red-600 hover:text-red-800 text-sm">Quitar imagen</button>}
           </div>
-
           {imagenPreview ? (
             <div className="relative">
               <img src={imagenPreview} alt="Vista previa" className="max-w-md rounded-lg shadow-md" />
@@ -693,38 +577,21 @@ export default function NuevoRegistro() {
               <p className="text-slate-600 mb-3">Sube una foto del recibo como evidencia</p>
               <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImagenChange} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                <Camera className="w-4 h-4" />
-                Tomar Foto / Subir Imagen
+                <Camera className="w-4 h-4" /> Tomar Foto / Subir Imagen
               </button>
               <p className="text-xs text-slate-500 mt-2">JPG, PNG. Máximo 5MB.</p>
             </div>
           )}
-
-          {subiendoImagen && (
-            <div className="mt-3 text-sm text-blue-600">📤 Subiendo imagen...</div>
-          )}
+          {subiendoImagen && <div className="mt-3 text-sm text-blue-600">📤 Subiendo imagen...</div>}
         </div>
 
         {!modoEdicion && (
           <div className="flex gap-2 mt-4">
-            <button onClick={guardarRegistro}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-              <Save className="w-4 h-4" />
-              {editandoId !== null ? 'Actualizar' : 'Agregar'}
+            <button onClick={guardarRegistro} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+              <Save className="w-4 h-4" /> {editandoId !== null ? 'Actualizar' : 'Agregar'}
             </button>
             {editandoId !== null && (
-              <button onClick={() => {
-                setEditandoId(null)
-                setRegistroActual({
-                  id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
-                  fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-                  nRecibo: 0, observaciones: '', 
-                  estibador: '',
-                  estib_hora_llegada: '',
-                  estib_hora_salida: '',
-                  estib_observaciones: '',
-                })
-              }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
+              <button onClick={() => { setEditandoId(null); setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' }) }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
                 <X className="w-4 h-4" /> Cancelar
               </button>
             )}
@@ -734,9 +601,7 @@ export default function NuevoRegistro() {
 
       {registros.length > 0 && !modoEdicion && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">
-            Registros Agregados ({registros.length})
-          </h3>
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Registros Agregados ({registros.length})</h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-800 text-white">
@@ -757,27 +622,17 @@ export default function NuevoRegistro() {
                   <tr key={reg.id} className="hover:bg-slate-50">
                     <td className="px-3 py-3 text-sm font-medium">{reg.id}</td>
                     <td className="px-3 py-3 text-sm">{reg.equipo}</td>
-                    <td className="px-3 py-3 text-sm">{reg.operador}</td>
+                    <td className="px-3 py-3 text-sm">{reg.operador || '-'}</td>
                     <td className="px-3 py-3 text-sm">{reg.estibador || '-'}</td>
-                    <td className="px-3 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                      }`}>{reg.fase}</span>
-                    </td>
-                    <td className="px-3 py-3 text-sm font-mono">{reg.hInicial}</td>
-                    <td className="px-3 py-3 text-sm font-mono">{reg.hFinal}</td>
-                    <td className="px-3 py-3 text-sm font-mono">{reg.nRecibo}</td>
+                    <td className="px-3 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{reg.fase || '-'}</span></td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.hInicial || '-'}</td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.hFinal || '-'}</td>
+                    <td className="px-3 py-3 text-sm font-mono">{reg.nRecibo || '-'}</td>
                     <td className="px-3 py-3">
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => setMostrandoPreview(reg)} className="text-blue-600 hover:text-blue-800" title="Ver detalles">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => editarRegistroLocal(reg)} className="text-slate-600 hover:text-slate-800" title="Editar">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => eliminarRegistroLocal(reg.id)} className="text-red-600 hover:text-red-800" title="Eliminar">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <button onClick={() => setMostrandoPreview(reg)} className="text-blue-600 hover:text-blue-800" title="Ver detalles"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => editarRegistroLocal(reg)} className="text-slate-600 hover:text-slate-800" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => eliminarRegistroLocal(reg.id)} className="text-red-600 hover:text-red-800" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -789,36 +644,27 @@ export default function NuevoRegistro() {
       )}
 
       <div className="flex justify-end">
-        <button
-          onClick={guardarEnSupabase}
-          disabled={guardando || subiendoImagen}
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
-        >
-          <FileText className="w-5 h-5" />
-          {guardando ? 'Guardando...' : (modoEdicion ? 'Actualizar Registro' : 'Guardar y Ver en Historial')}
+        <button onClick={guardarEnSupabase} disabled={guardando || subiendoImagen} className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50">
+          <FileText className="w-5 h-5" /> {guardando ? 'Guardando...' : (modoEdicion ? 'Actualizar Registro' : 'Guardar y Ver en Historial')}
         </button>
       </div>
 
-      {/* MODAL DE VISTA PREVIA */}
       {mostrandoPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex justify-between items-center">
               <h3 className="text-lg font-bold text-slate-900">Vista Previa del Registro</h3>
-              <button onClick={() => setMostrandoPreview(null)} className="text-slate-500 hover:text-slate-700">
-                <X className="w-6 h-6" />
-              </button>
+              <button onClick={() => setMostrandoPreview(null)} className="text-slate-500 hover:text-slate-700"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
                 <div><span className="text-slate-600">Equipo:</span> <strong>{mostrandoPreview.equipo}</strong></div>
-                <div><span className="text-slate-600">Operador:</span> <strong>{mostrandoPreview.operador}</strong></div>
-                <div><span className="text-slate-600">Cédula:</span> <strong>{mostrandoPreview.cedula || '-'}</strong></div>
-                <div><span className="text-slate-600">H.Inicial:</span> <strong>{mostrandoPreview.hInicial}</strong></div>
-                <div><span className="text-slate-600">H.Final:</span> <strong>{mostrandoPreview.hFinal}</strong></div>
-                <div><span className="text-slate-600">N° Recibo:</span> <strong>{mostrandoPreview.nRecibo}</strong></div>
+                <div><span className="text-slate-600">Operador:</span> <strong>{mostrandoPreview.operador || 'N/A'}</strong></div>
+                <div><span className="text-slate-600">Cédula:</span> <strong>{mostrandoPreview.cedula || 'N/A'}</strong></div>
+                <div><span className="text-slate-600">H.Inicial:</span> <strong>{mostrandoPreview.hInicial || 'N/A'}</strong></div>
+                <div><span className="text-slate-600">H.Final:</span> <strong>{mostrandoPreview.hFinal || 'N/A'}</strong></div>
+                <div><span className="text-slate-600">N° Recibo:</span> <strong>{mostrandoPreview.nRecibo || 'N/A'}</strong></div>
               </div>
-
               {mostrandoPreview.estibador && (
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                   <h4 className="font-semibold text-green-800 mb-2 text-sm">Datos del Estibador</h4>
@@ -830,10 +676,7 @@ export default function NuevoRegistro() {
                   </div>
                 </div>
               )}
-
-              {mostrandoPreview.observaciones && (
-                <div className="text-sm"><span className="text-slate-600">Observaciones Operador:</span> <strong>{mostrandoPreview.observaciones}</strong></div>
-              )}
+              {mostrandoPreview.observaciones && <div className="text-sm"><span className="text-slate-600">Observaciones Operador:</span> <strong>{mostrandoPreview.observaciones}</strong></div>}
             </div>
           </div>
         </div>

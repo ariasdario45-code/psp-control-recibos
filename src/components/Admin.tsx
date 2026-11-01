@@ -9,7 +9,6 @@ interface Registro {
   [key: string]: any
 }
 
-// Datos dinámicos para selects (se cargan desde Supabase)
 interface DatosSelect {
   proveedores: string[]
   operadores: string[]
@@ -116,7 +115,6 @@ export default function Admin() {
 
   const config = configTablas[tablaActiva]
 
-  // Cargar datos para los selects dinámicos
   const cargarDatosSelect = async () => {
     const tablas: { key: keyof DatosSelect; tabla: string }[] = [
       { key: 'proveedores', tabla: 'proveedores' },
@@ -138,11 +136,8 @@ export default function Admin() {
     setDatosSelect(resultados)
   }
 
-  // Cargar registros de la tabla activa
   const cargarRegistros = async () => {
     setCargando(true)
-    
-    // Ordenar por nombre en lugar de ID para mejor UX
     const { data, error } = await supabase
       .from(tablaActiva)
       .select('*')
@@ -252,7 +247,6 @@ export default function Admin() {
     setFormulario({})
   }
 
-  // Obtener opciones para un campo (estáticas o dinámicas)
   const getOpcionesCampo = (col: typeof config.columnas[0]): string[] => {
     if (col.opcionesDinamicas) {
       return datosSelect[col.opcionesDinamicas] || []
