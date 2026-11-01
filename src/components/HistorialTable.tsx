@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Filter, Edit2, Trash2, FileText } from 'lucide-react'
+import { Download, Filter, Edit2, Trash2, FileText, Eye, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as ExcelJS from 'exceljs'
 import jsPDF from 'jspdf'
@@ -21,6 +21,9 @@ interface Detalle {
   n_recibo: number
   observaciones: string
   estibador: string
+  estib_hora_llegada: string
+  estib_hora_salida: string
+  estib_observaciones: string
   fecha: string
   tipo_carga: string
   turno: string
@@ -62,6 +65,9 @@ export default function HistorialTable() {
     motonave: '',
     auxiliar: '',
   })
+  
+  // Estado para el modal de vista previa
+  const [mostrandoPreview, setMostrandoPreview] = useState<Detalle | null>(null)
 
   useEffect(() => {
     cargarRegistros()
@@ -96,7 +102,8 @@ export default function HistorialTable() {
           planilla_detalles (
             id, equipo, proveedor, operador, cedula, fase,
             h_inicial, h_final, hora_inicio, hora_fin,
-            n_recibo, observaciones, estibador
+            n_recibo, observaciones, estibador,
+            estib_hora_llegada, estib_hora_salida, estib_observaciones
           )
         `)
         .order('creado_en', { ascending: false })
@@ -199,6 +206,9 @@ export default function HistorialTable() {
         nRecibo: reg.n_recibo,
         observaciones: reg.observaciones,
         estibador: reg.estibador,
+        estib_hora_llegada: reg.estib_hora_llegada,
+        estib_hora_salida: reg.estib_hora_salida,
+        estib_observaciones: reg.estib_observaciones,
       }],
     }
     localStorage.setItem('planilla_editar', JSON.stringify(datosEditar))
@@ -225,7 +235,6 @@ export default function HistorialTable() {
       const margin = 15
       let currentY = margin
 
-      // Logo (si existe)
       if (config.logo_url && config.logo_url.startsWith('data:image')) {
         try {
           doc.addImage(config.logo_url, 'PNG', margin, currentY, 20, 20)
@@ -234,7 +243,6 @@ export default function HistorialTable() {
         }
       }
 
-      // Encabezado empresa
       const textX = config.logo_url ? margin + 25 : margin
       doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
@@ -246,7 +254,6 @@ export default function HistorialTable() {
       doc.setTextColor(100, 100, 100)
       doc.text(config.subtitulo_empresa || 'Operaciones Portuarias', textX, currentY + 15)
 
-      // Datos empresa a la derecha
       doc.setFontSize(9)
       doc.setTextColor(80, 80, 80)
       const rightX = pageWidth - margin
@@ -257,26 +264,22 @@ export default function HistorialTable() {
 
       currentY += 28
 
-      // Línea separadora
       doc.setDrawColor(30, 64, 175)
       doc.setLineWidth(0.8)
       doc.line(margin, currentY, pageWidth - margin, currentY)
       currentY += 10
 
-      // Título
       doc.setFontSize(16)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(0, 0, 0)
       doc.text('PLANILLA DE CONTROL DE RECIBOS', pageWidth / 2, currentY, { align: 'center' })
       currentY += 12
 
-      // Información de la planilla (2 columnas)
       doc.setFontSize(11)
       const infoY = currentY
       const col1X = margin
       const col2X = pageWidth / 2 + 10
 
-      // Columna 1
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(60, 60, 60)
       doc.text('Fecha:', col1X, infoY)
@@ -298,7 +301,6 @@ export default function HistorialTable() {
       doc.setTextColor(0, 0, 0)
       doc.text(primeraPlanilla?.turno || 'N/A', col1X + 25, infoY + 14)
 
-      // Columna 2
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(60, 60, 60)
       doc.text('Motonave:', col2X, infoY)
@@ -315,7 +317,6 @@ export default function HistorialTable() {
 
       currentY = infoY + 22
 
-      // Tabla de registros
       const tableData = registrosFiltrados.map((reg, idx) => [
         (idx + 1).toString(),
         reg.equipo,
@@ -371,7 +372,6 @@ export default function HistorialTable() {
         margin: { left: margin, right: margin },
       })
 
-      // Totales
       const finalY = (doc as any).lastAutoTable.finalY + 12
 
       const totalHoras = registrosFiltrados.reduce((sum, reg) => {
@@ -384,7 +384,6 @@ export default function HistorialTable() {
       doc.text(`Total de Registros: ${registrosFiltrados.length}`, margin, finalY)
       doc.text(`Total Horas Trabajadas: ${totalHoras.toFixed(1)} horas`, margin, finalY + 7)
 
-      // Firmas
       const firmaY = finalY + 30
       const firmaWidth = 70
 
@@ -402,7 +401,6 @@ export default function HistorialTable() {
       doc.text('Firma Administrador', pageWidth - margin - firmaWidth, firmaY + 5)
       doc.text(config.nombre_empresa, pageWidth - margin - firmaWidth, firmaY + 10)
 
-      // Pie de página
       const footerY = pageHeight - 8
       doc.setFontSize(7)
       doc.setTextColor(150, 150, 150)
@@ -413,7 +411,6 @@ export default function HistorialTable() {
         { align: 'center' }
       )
 
-      // Guardar
       const nombreArchivo = `Planilla_${primeraPlanilla?.fecha || new Date().toISOString().split('T')[0]}.pdf`
       doc.save(nombreArchivo)
       
@@ -722,9 +719,17 @@ export default function HistorialTable() {
                     <td className="px-3 py-3 text-sm">{reg.observaciones}</td>
                     <td className="px-3 py-3">
                       <div className="flex justify-center gap-2">
+                        {/* BOTÓN DE VISTA PREVIA AGREGADO AQUÍ */}
+                        <button
+                          onClick={() => setMostrandoPreview(reg)}
+                          className="text-blue-600 hover:text-blue-800 p-1"
+                          title="Ver detalles"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => editarRegistro(reg)}
-                          className="text-blue-600 hover:text-blue-800 p-1"
+                          className="text-slate-600 hover:text-slate-800 p-1"
                           title="Editar"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -745,6 +750,57 @@ export default function HistorialTable() {
           </table>
         </div>
       </div>
+
+      {/* MODAL DE VISTA PREVIA INTELIGENTE */}
+      {mostrandoPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900">Vista Previa del Registro</h3>
+              <button onClick={() => setMostrandoPreview(null)} className="text-slate-500 hover:text-slate-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <h4 className="font-semibold text-slate-800 mb-3 text-sm uppercase">Datos Generales</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div><span className="text-slate-600">Fecha:</span> <strong>{mostrandoPreview.fecha}</strong></div>
+                  <div><span className="text-slate-600">Motonave:</span> <strong>{mostrandoPreview.motonave}</strong></div>
+                  <div><span className="text-slate-600">Auxiliar:</span> <strong>{mostrandoPreview.auxiliar}</strong></div>
+                  <div><span className="text-slate-600">Equipo:</span> <strong>{mostrandoPreview.equipo}</strong></div>
+                  <div><span className="text-slate-600">Operador:</span> <strong>{mostrandoPreview.operador}</strong></div>
+                  <div><span className="text-slate-600">Cédula:</span> <strong>{mostrandoPreview.cedula || '-'}</strong></div>
+                </div>
+              </div>
+
+              {mostrandoPreview.estibador && (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <h4 className="font-semibold text-green-800 mb-3 text-sm uppercase">Datos del Estibador</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div><span className="text-slate-600">Nombre:</span> <strong>{mostrandoPreview.estibador}</strong></div>
+                    <div><span className="text-slate-600">Hora Llegada:</span> <strong>{mostrandoPreview.estib_hora_llegada || '-'}</strong></div>
+                    <div><span className="text-slate-600">Hora Salida:</span> <strong>{mostrandoPreview.estib_hora_salida || '-'}</strong></div>
+                    <div className="md:col-span-3"><span className="text-slate-600">Observaciones:</span> <strong>{mostrandoPreview.estib_observaciones || 'Ninguna'}</strong></div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-800 mb-3 text-sm uppercase">Horario y Recibo</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div><span className="text-slate-600">H.Inicial:</span> <strong>{mostrandoPreview.h_inicial}</strong></div>
+                  <div><span className="text-slate-600">H.Final:</span> <strong>{mostrandoPreview.h_final}</strong></div>
+                  <div><span className="text-slate-600">Hora Inicio:</span> <strong>{mostrandoPreview.hora_inicio}</strong></div>
+                  <div><span className="text-slate-600">Hora Final:</span> <strong>{mostrandoPreview.hora_fin}</strong></div>
+                  <div className="md:col-span-2"><span className="text-slate-600">N° Recibo:</span> <strong>{mostrandoPreview.n_recibo}</strong></div>
+                  <div className="md:col-span-2"><span className="text-slate-600">Observaciones Op.:</span> <strong>{mostrandoPreview.observaciones || 'Ninguna'}</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

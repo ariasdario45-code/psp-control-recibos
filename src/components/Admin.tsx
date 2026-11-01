@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { Plus, Edit2, Trash2, Save, X, Users, Truck, Box, Layers, UserShield, Clock, Ship, Package } from 'lucide-react'
+import { Plus, Edit2, Trash2, Save, X, Users, Truck, Box, Layers, UserShield, Clock, Ship, Package, HardHat } from 'lucide-react'
 
 type TablaActiva = 'operadores' | 'proveedores' | 'equipos' | 'fases' | 'auxiliares' | 'turnos' | 'naves' | 'tipos_carga' | 'estibadores'
 
@@ -9,10 +9,23 @@ interface Registro {
   [key: string]: any
 }
 
+// Datos dinámicos para selects (se cargan desde Supabase)
+interface DatosSelect {
+  proveedores: string[]
+  operadores: string[]
+  equipos: string[]
+  fases: string[]
+  auxiliares: string[]
+  turnos: string[]
+  naves: string[]
+  tiposCarga: string[]
+  estibadores: string[]
+}
+
 const configTablas: Record<TablaActiva, {
   nombre: string
   icono: any
-  columnas: { key: string; label: string; tipo: 'text' | 'select' | 'number'; opciones?: string[] }[]
+  columnas: { key: string; label: string; tipo: 'text' | 'select' | 'number'; opciones?: string[]; opcionesDinamicas?: keyof DatosSelect }[]
 }> = {
   operadores: {
     nombre: 'Operadores',
@@ -36,8 +49,8 @@ const configTablas: Record<TablaActiva, {
     icono: Box,
     columnas: [
       { key: 'nombre', label: 'Nombre', tipo: 'text' },
-      { key: 'proveedor', label: 'Proveedor', tipo: 'text' },
-      { key: 'tipo', label: 'Tipo', tipo: 'text' },
+      { key: 'proveedor', label: 'Proveedor', tipo: 'select', opcionesDinamicas: 'proveedores' },
+      { key: 'tipo', label: 'Tipo', tipo: 'select', opciones: ['GRUA', 'ELEVADOR', 'ASCENSOR', 'FMC', 'TRACTOCAMION', 'MONTACARGAS', 'OTRO'] },
     ],
   },
   fases: {
@@ -79,11 +92,11 @@ const configTablas: Record<TablaActiva, {
   },
   estibadores: {
     nombre: 'Estibadores',
-    icono: Users,
+    icono: HardHat,
     columnas: [
       { key: 'nombre', label: 'Nombre', tipo: 'text' },
-      { key: 'cedula', label: 'Cédula', tipo: 'text' },
-      { key: 'tipo', label: 'Tipo', tipo: 'select', opciones: ['PROPIO', 'SUBCONTRATADO'] },
+      { key: 'empresa', label: 'Empresa', tipo: 'text' },
+      { key: 'tipo', label: 'Tipo', tipo: 'select', opciones: ['ESTIBADOR', 'CAPATAZ', 'CUADRILLA'] },
     ],
   },
 }
@@ -96,15 +109,44 @@ export default function Admin() {
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false)
   const [formulario, setFormulario] = useState<Record<string, any>>({})
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
+  const [datosSelect, setDatosSelect] = useState<DatosSelect>({
+    proveedores: [], operadores: [], equipos: [], fases: [],
+    auxiliares: [], turnos: [], naves: [], tiposCarga: [], estibadores: []
+  })
 
   const config = configTablas[tablaActiva]
 
+  // Cargar datos para los selects dinámicos
+  const cargarDatosSelect = async () => {
+    const tablas: { key: keyof DatosSelect; tabla: string }[] = [
+      { key: 'proveedores', tabla: 'proveedores' },
+      { key: 'operadores', tabla: 'operadores' },
+      { key: 'equipos', tabla: 'equipos' },
+      { key: 'fases', tabla: 'fases' },
+      { key: 'auxiliares', tabla: 'auxiliares' },
+      { key: 'turnos', tabla: 'turnos' },
+      { key: 'naves', tabla: 'naves' },
+      { key: 'tiposCarga', tabla: 'tipos_carga' },
+      { key: 'estibadores', tabla: 'estibadores' },
+    ]
+
+    const resultados: any = {}
+    for (const item of tablas) {
+      const { data } = await supabase.from(item.tabla).select('nombre').order('nombre')
+      resultados[item.key] = (data || []).map((r: any) => r.nombre)
+    }
+    setDatosSelect(resultados)
+  }
+
+  // Cargar registros de la tabla activa
   const cargarRegistros = async () => {
     setCargando(true)
+    
+    // Ordenar por nombre en lugar de ID para mejor UX
     const { data, error } = await supabase
       .from(tablaActiva)
       .select('*')
-      .order('id', { ascending: true })
+      .order('nombre', { ascending: true })
 
     if (error) {
       console.error('Error al cargar:', error)
@@ -116,6 +158,7 @@ export default function Admin() {
   }
 
   useEffect(() => {
+    cargarDatosSelect()
     cargarRegistros()
   }, [tablaActiva])
 
@@ -160,6 +203,7 @@ export default function Admin() {
         mostrarMensaje('Registro actualizado correctamente', 'exito')
         setMostrandoFormulario(false)
         await cargarRegistros()
+        await cargarDatosSelect()
       }
     } else {
       const { error } = await supabase
@@ -167,11 +211,16 @@ export default function Admin() {
         .insert([formulario])
 
       if (error) {
-        mostrarMensaje('Error al agregar: ' + error.message, 'error')
+        if (error.message.includes('unique')) {
+          mostrarMensaje('Ese nombre ya existe. Usa otro diferente.', 'error')
+        } else {
+          mostrarMensaje('Error al agregar: ' + error.message, 'error')
+        }
       } else {
         mostrarMensaje('Registro agregado correctamente', 'exito')
         setMostrandoFormulario(false)
         await cargarRegistros()
+        await cargarDatosSelect()
       }
     }
 
@@ -192,6 +241,7 @@ export default function Admin() {
     } else {
       mostrarMensaje('Registro eliminado correctamente', 'exito')
       await cargarRegistros()
+      await cargarDatosSelect()
     }
     setCargando(false)
   }
@@ -200,6 +250,14 @@ export default function Admin() {
     setMostrandoFormulario(false)
     setEditandoId(null)
     setFormulario({})
+  }
+
+  // Obtener opciones para un campo (estáticas o dinámicas)
+  const getOpcionesCampo = (col: typeof config.columnas[0]): string[] => {
+    if (col.opcionesDinamicas) {
+      return datosSelect[col.opcionesDinamicas] || []
+    }
+    return col.opciones || []
   }
 
   return (
@@ -276,40 +334,43 @@ export default function Admin() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {config.columnas.map((col) => (
-                  <div key={col.key}>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      {col.label} {col.key === 'nombre' && '*'}
-                    </label>
-                    {col.tipo === 'select' ? (
-                      <select
-                        value={formulario[col.key] || ''}
-                        onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: e.target.value }))}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Seleccionar</option>
-                        {col.opciones?.map(op => (
-                          <option key={op} value={op}>{op}</option>
-                        ))}
-                      </select>
-                    ) : col.tipo === 'number' ? (
-                      <input
-                        type="number"
-                        value={formulario[col.key] || ''}
-                        onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: parseFloat(e.target.value) || 0 }))}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={formulario[col.key] || ''}
-                        onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: e.target.value }))}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                        placeholder={`Ingrese ${col.label.toLowerCase()}`}
-                      />
-                    )}
-                  </div>
-                ))}
+                {config.columnas.map((col) => {
+                  const opciones = getOpcionesCampo(col)
+                  return (
+                    <div key={col.key}>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {col.label} {col.key === 'nombre' && '*'}
+                      </label>
+                      {col.tipo === 'select' ? (
+                        <select
+                          value={formulario[col.key] || ''}
+                          onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Seleccionar</option>
+                          {opciones.map(op => (
+                            <option key={op} value={op}>{op}</option>
+                          ))}
+                        </select>
+                      ) : col.tipo === 'number' ? (
+                        <input
+                          type="number"
+                          value={formulario[col.key] || ''}
+                          onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: parseFloat(e.target.value) || 0 }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={formulario[col.key] || ''}
+                          onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder={`Ingrese ${col.label.toLowerCase()}`}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               <div className="flex gap-2">

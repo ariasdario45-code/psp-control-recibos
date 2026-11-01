@@ -5,9 +5,9 @@ import HistorialTable from './components/HistorialTable'
 import NuevoRegistro from './components/NuevoRegistro'
 import Admin from './components/Admin'
 import GestionUsuarios from './components/GestionUsuarios'
-import Dashboard from './components/Dashboard'
-import Configuracion from './components/Configuracion'
+import Configuracion from './components/Configuracion' // <-- IMPORTADO
 import Login from './components/Login'
+import Dashboard from './components/Dashboard'
 
 function RutaPrivada({ children }: { children: React.ReactNode }) {
   const { estaAutenticado } = useAuth()
@@ -18,7 +18,7 @@ function RutaPrivada({ children }: { children: React.ReactNode }) {
 function RutaAdmin({ children }: { children: React.ReactNode }) {
   const { estaAutenticado, esAdmin } = useAuth()
   if (!estaAutenticado) return <Navigate to="/login" replace />
-  if (!esAdmin) return <Navigate to="/" replace />
+  if (!esAdmin) return <Navigate to="/" replace /> // <-- PROTEGIDO
   return <>{children}</>
 }
 
@@ -33,11 +33,12 @@ function AppContenido() {
           <main className="flex-1 p-8 overflow-auto">
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/nuevo" element={<NuevoRegistro />} />
+              <Route path="/panel" element={<Dashboard />} />
               <Route path="/historial" element={<HistorialTable />} />
+              <Route path="/nuevo" element={<NuevoRegistro />} />
               <Route path="/admin" element={<RutaAdmin><Admin /></RutaAdmin>} />
               <Route path="/usuarios" element={<RutaAdmin><GestionUsuarios /></RutaAdmin>} />
-              <Route path="/configuracion" element={<RutaAdmin><Configuracion /></RutaAdmin>} />
+              <Route path="/configuracion" element={<RutaAdmin><Configuracion /></RutaAdmin>} /> {/* <-- RUTA AGREGADA */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save, X, Trash2, Edit2 } from 'lucide-react'
+import { Save, X, Trash2, Edit2, Camera, Eye, FileText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -28,12 +28,17 @@ interface Registro {
   horaFin: string
   nRecibo: number
   observaciones: string
+  // Estibador simplificado
   estibador: string
+  estib_hora_llegada: string
+  estib_hora_salida: string
+  estib_observaciones: string
 }
 
 export default function NuevoRegistro() {
   const navigate = useNavigate()
   const datosEditCargados = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [equipos, setEquipos] = useState<string[]>([])
   const [proveedores, setProveedores] = useState<string[]>([])
@@ -59,10 +64,18 @@ export default function NuevoRegistro() {
   const [registroActual, setRegistroActual] = useState<Registro>({
     id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
     fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-    nRecibo: 0, observaciones: '', estibador: '',
+    nRecibo: 0, observaciones: '', 
+    estibador: '',
+    estib_hora_llegada: '',
+    estib_hora_salida: '',
+    estib_observaciones: '',
   })
 
   const [editandoId, setEditandoId] = useState<number | null>(null)
+  const [imagenPreview, setImagenPreview] = useState<string>('')
+  const [imagenFile, setImagenFile] = useState<File | null>(null)
+  const [subiendoImagen, setSubiendoImagen] = useState(false)
+  const [mostrandoPreview, setMostrandoPreview] = useState<Registro | null>(null)
 
   useEffect(() => {
     const cargarDatosMaestros = async () => {
@@ -112,8 +125,6 @@ export default function NuevoRegistro() {
     const datosEditar = localStorage.getItem('planilla_editar')
     if (datosEditar && !datosEditCargados.current) {
       const datos = JSON.parse(datosEditar)
-      
-      console.log('📥 Datos de edición cargados:', datos)
       
       setModoEdicion(true)
       setIdPlanillaEditar(datos.planilla_id || null)
@@ -186,8 +197,14 @@ export default function NuevoRegistro() {
     setRegistroActual({
       id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
       fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-      nRecibo: 0, observaciones: '', estibador: '',
+      nRecibo: 0, observaciones: '', 
+      estibador: '',
+      estib_hora_llegada: '',
+      estib_hora_salida: '',
+      estib_observaciones: '',
     })
+    setImagenPreview('')
+    setImagenFile(null)
   }
 
   const editarRegistroLocal = (registro: Registro) => {
@@ -204,7 +221,11 @@ export default function NuevoRegistro() {
         setRegistroActual({
           id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
           fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-          nRecibo: 0, observaciones: '', estibador: '',
+          nRecibo: 0, observaciones: '', 
+          estibador: '',
+          estib_hora_llegada: '',
+          estib_hora_salida: '',
+          estib_observaciones: '',
         })
       }
     }
@@ -223,102 +244,99 @@ export default function NuevoRegistro() {
       setRegistroActual({
         id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
         fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-        nRecibo: 0, observaciones: '', estibador: '',
+        nRecibo: 0, observaciones: '', 
+        estibador: '',
+        estib_hora_llegada: '',
+        estib_hora_salida: '',
+        estib_observaciones: '',
       })
       setEditandoId(null)
+      setImagenPreview('')
+      setImagenFile(null)
       navigate('/historial')
     }
   }
 
-  const guardarEnSupabase = async () => {
-    console.log('🟢 Iniciando guardarEnSupabase')
-    console.log('📋 modoEdicion:', modoEdicion)
-    console.log('📋 idPlanillaEditar:', idPlanillaEditar)
-    console.log('📋 idDetalleEditar:', idDetalleEditar)
-    console.log('📋 registroActual:', registroActual)
+  const subirImagen = async (file: File): Promise<string | null> => {
+    try {
+      setSubiendoImagen(true)
+      const timestamp = Date.now()
+      const fileName = `recibo_${timestamp}_${file.name}`
+      
+      const { data, error } = await supabase
+        .storage
+        .from('recibos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
 
+      if (error) throw error
+
+      const { data: urlData } = supabase
+        .storage
+        .from('recibos')
+        .getPublicUrl(fileName)
+
+      setSubiendoImagen(false)
+      return urlData.publicUrl
+    } catch (error: any) {
+      console.error('Error al subir imagen:', error)
+      alert('Error al subir imagen: ' + error.message)
+      setSubiendoImagen(false)
+      return null
+    }
+  }
+
+  const handleImagenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      alert('Solo se permiten archivos de imagen')
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('La imagen no debe superar 5MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagenPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+    
+    setImagenFile(file)
+  }
+
+  const guardarEnSupabase = async () => {
     if (!fecha || !tipoCarga || !turno || !motonave || !auxiliar) {
-      alert('⚠️ Por favor completa todos los campos del encabezado')
+      alert('Por favor completa todos los campos del encabezado')
       return
     }
 
     const datosAGuardar = modoEdicion ? [registroActual] : registros
 
     if (datosAGuardar.length === 0) {
-      alert('⚠️ Agrega al menos un registro antes de guardar')
+      alert('Agrega al menos un registro antes de guardar')
       return
     }
 
     if (modoEdicion && (!idPlanillaEditar || !idDetalleEditar)) {
-      console.error('❌ IDs faltantes:', { idPlanillaEditar, idDetalleEditar })
-      alert('❌ Error: No se pudieron cargar los IDs del registro. Por favor, vuelve al Historial e intenta editar de nuevo.')
+      console.error('IDs faltantes:', { idPlanillaEditar, idDetalleEditar })
+      alert('Error: No se pudieron cargar los IDs del registro.')
       return
     }
 
     setGuardando(true)
 
     try {
-      if (modoEdicion && idPlanillaEditar && idDetalleEditar) {
-        const detalle = datosAGuardar[0]
-        
-        console.log('🔄 ACTUALIZANDO detalle ID:', idDetalleEditar)
-        console.log('📝 Nuevos datos:', detalle)
-        
-        const { data: updateData, error: updateError } = await supabase
-          .from('planilla_detalles')
-          .update({
-            equipo: detalle.equipo,
-            proveedor: detalle.proveedor,
-            operador: detalle.operador,
-            cedula: detalle.cedula,
-            fase: detalle.fase,
-            h_inicial: detalle.hInicial,
-            h_final: detalle.hFinal,
-            hora_inicio: detalle.horaInicio,
-            hora_fin: detalle.horaFin,
-            n_recibo: detalle.nRecibo,
-            observaciones: detalle.observaciones,
-            estibador: detalle.estibador,
-          })
-          .eq('id', idDetalleEditar)
-          .select()
+      let planillaId = idPlanillaEditar
+      let detalleId = idDetalleEditar
 
-        console.log('📊 Resultado update detalle:', { data: updateData, error: updateError })
-
-        if (updateError) {
-          console.error('❌ Error update detalle:', updateError)
-          alert('❌ Error al actualizar: ' + updateError.message)
-          setGuardando(false)
-          return
-        }
-
-        console.log('🔄 ACTUALIZANDO planilla ID:', idPlanillaEditar)
-        
-        const { error: planillaError } = await supabase
-          .from('planillas')
-          .update({
-            fecha: fecha,
-            tipo_carga: tipoCarga,
-            turno: turno,
-            motonave: motonave,
-            auxiliar: auxiliar,
-          })
-          .eq('id', idPlanillaEditar)
-
-        console.log('📊 Resultado update planilla:', { error: planillaError })
-
-        if (planillaError) {
-          console.error('❌ Error update planilla:', planillaError)
-          alert('❌ Error al actualizar planilla: ' + planillaError.message)
-          setGuardando(false)
-          return
-        }
-
-        console.log('✅ ACTUALIZACIÓN EXITOSA')
-        alert('✅ Registro actualizado exitosamente')
-      } else {
-        console.log('➕ MODO CREACIÓN')
-        
+      if (!modoEdicion) {
         const { data: planillaData, error: planillaError } = await supabase
           .from('planillas')
           .insert([{
@@ -330,14 +348,8 @@ export default function NuevoRegistro() {
           }])
           .select()
 
-        if (planillaError) {
-          console.error('❌ Error insert planilla:', planillaError)
-          alert('❌ Error: ' + planillaError.message)
-          setGuardando(false)
-          return
-        }
-
-        const planillaId = planillaData[0].id
+        if (planillaError) throw planillaError
+        planillaId = planillaData[0].id
 
         const detalles = datosAGuardar.map(r => ({
           planilla_id: planillaId,
@@ -353,30 +365,86 @@ export default function NuevoRegistro() {
           n_recibo: r.nRecibo,
           observaciones: r.observaciones,
           estibador: r.estibador,
+          estib_hora_llegada: r.estib_hora_llegada || null,
+          estib_hora_salida: r.estib_hora_salida || null,
+          estib_observaciones: r.estib_observaciones || null,
         }))
 
-        const { error: detallesError } = await supabase
+        const { data: detallesData, error: detallesError } = await supabase
           .from('planilla_detalles')
           .insert(detalles)
+          .select()
 
-        if (detallesError) {
-          console.error('❌ Error insert detalles:', detallesError)
-          alert('❌ Error: ' + detallesError.message)
-          setGuardando(false)
-          return
-        }
+        if (detallesError) throw detallesError
+        detalleId = detallesData[0].id
+      } else {
+        const detalle = datosAGuardar[0]
+        
+        const { error: updateError } = await supabase
+          .from('planilla_detalles')
+          .update({
+            equipo: detalle.equipo,
+            proveedor: detalle.proveedor,
+            operador: detalle.operador,
+            cedula: detalle.cedula,
+            fase: detalle.fase,
+            h_inicial: detalle.hInicial,
+            h_final: detalle.hFinal,
+            hora_inicio: detalle.horaInicio,
+            hora_fin: detalle.horaFin,
+            n_recibo: detalle.nRecibo,
+            observaciones: detalle.observaciones,
+            estibador: detalle.estibador,
+            estib_hora_llegada: detalle.estib_hora_llegada || null,
+            estib_hora_salida: detalle.estib_hora_salida || null,
+            estib_observaciones: detalle.estib_observaciones || null,
+          })
+          .eq('id', detalleId)
 
-        alert('✅ Planilla guardada exitosamente')
+        if (updateError) throw updateError
+
+        const { error: planillaError } = await supabase
+          .from('planillas')
+          .update({
+            fecha: fecha,
+            tipo_carga: tipoCarga,
+            turno: turno,
+            motonave: motonave,
+            auxiliar: auxiliar,
+          })
+          .eq('id', planillaId)
+
+        if (planillaError) throw planillaError
       }
 
+      if (imagenFile && planillaId && detalleId) {
+        const imageUrl = await subirImagen(imagenFile)
+        
+        if (imageUrl) {
+          const { error: evidenciaError } = await supabase
+            .from('evidencias')
+            .insert([{
+              planilla_id: planillaId,
+              detalle_id: detalleId,
+              url_imagen: imageUrl,
+            }])
+
+          if (evidenciaError) {
+            console.error('Error al guardar evidencia:', evidenciaError)
+          }
+        }
+      }
+
+      alert('Planilla guardada exitosamente' + (imagenFile ? ' con evidencia fotográfica' : ''))
+      
       localStorage.removeItem('planilla_actual')
       localStorage.removeItem('planilla_editar')
       datosEditCargados.current = false
       
       window.location.href = '/historial'
     } catch (error: any) {
-      console.error('❌ Error general:', error)
-      alert('❌ Error: ' + error.message)
+      console.error('Error al guardar:', error)
+      alert('Error al guardar: ' + error.message)
     }
 
     setGuardando(false)
@@ -468,6 +536,7 @@ export default function NuevoRegistro() {
           {modoEdicion ? 'Datos del Registro (modifica lo necesario)' : 'Agregar Nuevo Registro'}
         </h3>
 
+        {/* FORMULARIO DEL OPERADOR - SIN CAMPO ESTIBADOR */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Equipo *</label>
@@ -491,14 +560,6 @@ export default function NuevoRegistro() {
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Seleccionar</option>
               {operadores.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Estibador</label>
-            <select name="estibador" value={registroActual.estibador} onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Seleccionar</option>
-              {estibadores.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
           <div>
@@ -550,15 +611,102 @@ export default function NuevoRegistro() {
               placeholder="0" />
           </div>
           <div className="lg:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones Operador</label>
             <input type="text" name="observaciones" value={registroActual.observaciones} onChange={handleChange}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="1H ALIMENTACION, SIN DETENCION, etc." />
+              placeholder="Detalles del operador..." />
           </div>
         </div>
 
+        {/* SECCIÓN ESTIBADOR SIMPLIFICADA - SOLO 4 CAMPOS */}
+        <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+          <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2 text-sm">
+            <span className="w-2 h-2 bg-green-600 rounded-full"></span>
+            Registro del Estibador (Opcional)
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Nombre del Estibador</label>
+              <input
+                type="text"
+                list="lista-estibadores"
+                name="estibador"
+                value={registroActual.estibador}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                placeholder="Seleccionar o escribir..."
+              />
+              <datalist id="lista-estibadores">
+                {estibadores.map(e => <option key={e} value={e} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Hora Llegada</label>
+              <select name="estib_hora_llegada" value={registroActual.estib_hora_llegada || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="">Seleccionar</option>
+                {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Hora Salida</label>
+              <select name="estib_hora_salida" value={registroActual.estib_hora_salida || ''} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="">Seleccionar</option>
+                {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Observaciones Estibador</label>
+              <input
+                type="text"
+                name="estib_observaciones"
+                value={registroActual.estib_observaciones || ''}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                placeholder="1H ALIMENTACION, DETENCION, etc."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* IMAGEN/EVIDENCIA */}
+        <div className="mt-6 p-4 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Camera className="w-5 h-5 text-blue-600" />
+              <h4 className="font-semibold text-slate-900">Evidencia Fotográfica del Recibo</h4>
+            </div>
+            {imagenPreview && (
+              <button onClick={() => { setImagenPreview(''); setImagenFile(null) }} className="text-red-600 hover:text-red-800 text-sm">
+                Quitar imagen
+              </button>
+            )}
+          </div>
+
+          {imagenPreview ? (
+            <div className="relative">
+              <img src={imagenPreview} alt="Vista previa" className="max-w-md rounded-lg shadow-md" />
+              <div className="mt-2 text-sm text-green-600">✅ Imagen lista para subir</div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Camera className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+              <p className="text-slate-600 mb-3">Sube una foto del recibo como evidencia</p>
+              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImagenChange} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                <Camera className="w-4 h-4" />
+                Tomar Foto / Subir Imagen
+              </button>
+              <p className="text-xs text-slate-500 mt-2">JPG, PNG. Máximo 5MB.</p>
+            </div>
+          )}
+
+          {subiendoImagen && (
+            <div className="mt-3 text-sm text-blue-600">📤 Subiendo imagen...</div>
+          )}
+        </div>
+
         {!modoEdicion && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-4">
             <button onClick={guardarRegistro}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
               <Save className="w-4 h-4" />
@@ -570,7 +718,11 @@ export default function NuevoRegistro() {
                 setRegistroActual({
                   id: 0, equipo: '', proveedor: '', operador: '', cedula: '',
                   fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30',
-                  nRecibo: 0, observaciones: '', estibador: '',
+                  nRecibo: 0, observaciones: '', 
+                  estibador: '',
+                  estib_hora_llegada: '',
+                  estib_hora_salida: '',
+                  estib_observaciones: '',
                 })
               }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
                 <X className="w-4 h-4" /> Cancelar
@@ -597,7 +749,7 @@ export default function NuevoRegistro() {
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Inicial</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Final</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase">N° Recibo</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Acciones</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -616,11 +768,14 @@ export default function NuevoRegistro() {
                     <td className="px-3 py-3 text-sm font-mono">{reg.hFinal}</td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.nRecibo}</td>
                     <td className="px-3 py-3">
-                      <div className="flex gap-2">
-                        <button onClick={() => editarRegistroLocal(reg)} className="text-blue-600 hover:text-blue-800">
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setMostrandoPreview(reg)} className="text-blue-600 hover:text-blue-800" title="Ver detalles">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => editarRegistroLocal(reg)} className="text-slate-600 hover:text-slate-800" title="Editar">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => eliminarRegistroLocal(reg.id)} className="text-red-600 hover:text-red-800">
+                        <button onClick={() => eliminarRegistroLocal(reg.id)} className="text-red-600 hover:text-red-800" title="Eliminar">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -636,13 +791,53 @@ export default function NuevoRegistro() {
       <div className="flex justify-end">
         <button
           onClick={guardarEnSupabase}
-          disabled={guardando}
+          disabled={guardando || subiendoImagen}
           className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
         >
-          <Save className="w-5 h-5" />
+          <FileText className="w-5 h-5" />
           {guardando ? 'Guardando...' : (modoEdicion ? 'Actualizar Registro' : 'Guardar y Ver en Historial')}
         </button>
       </div>
+
+      {/* MODAL DE VISTA PREVIA */}
+      {mostrandoPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900">Vista Previa del Registro</h3>
+              <button onClick={() => setMostrandoPreview(null)} className="text-slate-500 hover:text-slate-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
+                <div><span className="text-slate-600">Equipo:</span> <strong>{mostrandoPreview.equipo}</strong></div>
+                <div><span className="text-slate-600">Operador:</span> <strong>{mostrandoPreview.operador}</strong></div>
+                <div><span className="text-slate-600">Cédula:</span> <strong>{mostrandoPreview.cedula || '-'}</strong></div>
+                <div><span className="text-slate-600">H.Inicial:</span> <strong>{mostrandoPreview.hInicial}</strong></div>
+                <div><span className="text-slate-600">H.Final:</span> <strong>{mostrandoPreview.hFinal}</strong></div>
+                <div><span className="text-slate-600">N° Recibo:</span> <strong>{mostrandoPreview.nRecibo}</strong></div>
+              </div>
+
+              {mostrandoPreview.estibador && (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <h4 className="font-semibold text-green-800 mb-2 text-sm">Datos del Estibador</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                    <div><span className="text-slate-600">Nombre:</span> <strong>{mostrandoPreview.estibador}</strong></div>
+                    <div><span className="text-slate-600">Llegada:</span> <strong>{mostrandoPreview.estib_hora_llegada || '-'}</strong></div>
+                    <div><span className="text-slate-600">Salida:</span> <strong>{mostrandoPreview.estib_hora_salida || '-'}</strong></div>
+                    <div className="md:col-span-3"><span className="text-slate-600">Observaciones:</span> <strong>{mostrandoPreview.estib_observaciones || '-'}</strong></div>
+                  </div>
+                </div>
+              )}
+
+              {mostrandoPreview.observaciones && (
+                <div className="text-sm"><span className="text-slate-600">Observaciones Operador:</span> <strong>{mostrandoPreview.observaciones}</strong></div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
