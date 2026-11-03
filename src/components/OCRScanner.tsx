@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react'
 import { Camera, Upload, Loader, CheckCircle, AlertCircle, XCircle } from 'lucide-react'
 import { createWorker } from 'tesseract.js'
 import { ImageProcessor } from '../lib/ocr/imageProcessor'
-import { ReceiptParser, ExtractedData } from '../lib/ocr/receiptParser'
+import { ReceiptParser } from '../lib/ocr/receiptParser'
+import type { ExtractedData } from '../lib/ocr/receiptParser'
 
 interface OCRScannerProps {
   onExtracted: (data: ExtractedData) => void

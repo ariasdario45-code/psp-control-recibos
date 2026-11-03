@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Save, X, Trash2, Edit2, Camera, Eye, FileText, CheckCircle } from 'lucide-react'
 import OCRScanner from './OCRScanner'
-import { ExtractedData } from '../lib/ocr/receiptParser'
+import type { ExtractedData } from '../lib/ocr/receiptParser'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -115,9 +115,7 @@ export default function NuevoRegistro() {
         setAuxiliares(dataAuxiliares?.map(a => a.nombre) || [])
         setTiposCarga(dataTiposCarga?.map(t => t.nombre) || [])
         setEstibadores(dataEstibadores?.map(e => e.nombre) || [])
-      } catch (error) { 
-        console.error('Error al cargar datos maestros:', error) 
-      }
+      } catch (error) { console.error('Error al cargar datos maestros:', error) }
     }
     cargarDatosMaestros()
   }, [])
@@ -190,12 +188,7 @@ export default function NuevoRegistro() {
       setRegistros(prev => [...prev, { ...registroActual, id: nuevoId }])
     }
 
-    // Solo limpiar los datos del formulario, NO la imagen
-    setRegistroActual({ 
-      id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', 
-      hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, 
-      observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' 
-    })
+    setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
   }
 
   const editarRegistroLocal = (registro: Registro) => {
@@ -209,11 +202,7 @@ export default function NuevoRegistro() {
       setRegistros(prev => prev.filter(r => r.id !== id))
       if (editandoId === id) {
         setEditandoId(null)
-        setRegistroActual({ 
-          id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', 
-          hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, 
-          observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' 
-        })
+        setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
       }
     }
   }
@@ -228,11 +217,7 @@ export default function NuevoRegistro() {
       datosEditCargados.current = false
       setFecha(''); setTipoCarga(''); setTurno(''); setMotonave(''); setAuxiliar('')
       setRegistros([])
-      setRegistroActual({ 
-        id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', 
-        hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, 
-        observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' 
-      })
+      setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
       setEditandoId(null)
       setImagenPreview('')
       setImagenFile(null)
@@ -245,20 +230,11 @@ export default function NuevoRegistro() {
       setSubiendoImagen(true)
       const fileName = `recibo_${Date.now()}_${file.name.replace(/\s+/g, '_')}`
       console.log('📤 Subiendo imagen:', { fileName, bucket: 'evidencias', fileSize: file.size })
-      
-      const { data, error } = await supabase.storage.from('evidencias').upload(fileName, file, { 
-        cacheControl: '3600', upsert: false 
-      })
-      
-      if (error) { 
-        console.error('❌ Error al subir a Storage:', error); 
-        throw error 
-      }
-      
+      const { data, error } = await supabase.storage.from('evidencias').upload(fileName, file, { cacheControl: '3600', upsert: false })
+      if (error) { console.error('❌ Error al subir a Storage:', error); throw error }
       console.log('✅ Archivo subido:', data)
       const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(fileName)
       console.log('🔗 URL pública:', urlData.publicUrl)
-      
       setSubiendoImagen(false)
       return urlData.publicUrl
     } catch (error: any) {
@@ -274,7 +250,6 @@ export default function NuevoRegistro() {
     if (!file) return
     if (!file.type.startsWith('image/')) { alert('Solo se permiten archivos de imagen'); return }
     if (file.size > 5 * 1024 * 1024) { alert('La imagen no debe superar 5MB'); return }
-    
     const reader = new FileReader()
     reader.onloadend = () => setImagenPreview(reader.result as string)
     reader.readAsDataURL(file)
@@ -334,11 +309,7 @@ export default function NuevoRegistro() {
 
       if (!modoEdicion) {
         console.log('💾 Creando planilla...', { fecha, tipoCarga, turno, motonave, auxiliar })
-        const { data: planillaData, error: planillaError } = await supabase
-          .from('planillas')
-          .insert([{ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }])
-          .select()
-          
+        const { data: planillaData, error: planillaError } = await supabase.from('planillas').insert([{ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }]).select()
         if (planillaError) { console.error('❌ Error al crear planilla:', planillaError); throw planillaError }
         planillaId = planillaData[0].id
         console.log('✅ Planilla creada con ID:', planillaId)
@@ -363,11 +334,7 @@ export default function NuevoRegistro() {
         }))
         
         console.log('💾 Insertando detalles:', detalles)
-        const { data: detallesData, error: detallesError } = await supabase
-          .from('planilla_detalles')
-          .insert(detalles)
-          .select()
-          
+        const { data: detallesData, error: detallesError } = await supabase.from('planilla_detalles').insert(detalles).select()
         if (detallesError) { console.error('❌ Error al insertar detalles:', detallesError); throw detallesError }
         detalleId = detallesData[0].id
         console.log('✅ Detalle creado con ID:', detalleId)
@@ -380,24 +347,22 @@ export default function NuevoRegistro() {
           estibador: detalle.estibador || null, estib_hora_llegada: detalle.estib_hora_llegada || null,
           estib_hora_salida: detalle.estib_hora_salida || null, estib_observaciones: detalle.estib_observaciones || null,
         }).eq('id', detalleId)
-        
         if (updateError) throw updateError
-        
         await supabase.from('planillas').update({ fecha, tipo_carga: tipoCarga, turno, motonave, auxiliar }).eq('id', planillaId)
       }
 
-      // ✅ GUARDAR IMAGEN
       if (imagenFile && planillaId && detalleId) {
         console.log('📸 Subiendo imagen a Supabase Storage...')
         const imageUrl = await subirImagen(imagenFile)
+        console.log('📸 URL obtenida:', imageUrl)
         
         if (imageUrl) {
-          console.log('💾 Guardando en tabla evidencias:', { planilla_id: planillaId, detalle_id: detalleId, imagen_url: imageUrl })
-          const { data, error: evidenciaError } = await supabase
-            .from('evidencias')
-            .insert([{ planilla_id: planillaId, detalle_id: detalleId, imagen_url: imageUrl }])
-            .select()
-            
+          console.log('💾 Guardando en tabla evidencias:', {
+            planilla_id: planillaId,
+            detalle_id: detalleId,
+            imagen_url: imageUrl
+          })
+          const { data, error: evidenciaError } = await supabase.from('evidencias').insert([{ planilla_id: planillaId, detalle_id: detalleId, imagen_url: imageUrl }]).select()
           if (evidenciaError) {
             console.error('❌ Error al guardar evidencia:', evidenciaError)
             alert('⚠️ Error al guardar imagen: ' + evidenciaError.message)
@@ -408,6 +373,12 @@ export default function NuevoRegistro() {
           console.error('❌ No se obtuvo URL de imagen')
           alert('⚠️ La imagen no se pudo subir a Supabase')
         }
+      } else {
+        console.log('⚠️ No se guardará imagen porque:', {
+          tieneImagen: !!imagenFile,
+          tienePlanillaId: !!planillaId,
+          tieneDetalleId: !!detalleId
+        })
       }
 
       alert('Planilla guardada exitosamente' + (imagenFile ? ' con evidencia fotográfica' : ''))
@@ -424,12 +395,9 @@ export default function NuevoRegistro() {
 
   return (
     <div className="space-y-6">
-      {/* ENCABEZADO */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-900">
-            {modoEdicion ? 'Editar Registro de Planilla' : 'Nuevo Registro de Planilla'}
-          </h2>
+          <h2 className="text-2xl font-bold text-slate-900">{modoEdicion ? 'Editar Registro de Planilla' : 'Nuevo Registro de Planilla'}</h2>
           <button onClick={limpiarTodo} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
             <Trash2 className="w-4 h-4" /> Limpiar Todo
           </button>
@@ -475,11 +443,8 @@ export default function NuevoRegistro() {
         </div>
       </div>
 
-      {/* FORMULARIO DE REGISTRO */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">
-          {modoEdicion ? 'Datos del Registro' : 'Agregar Nuevo Registro'}
-        </h3>
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">{modoEdicion ? 'Datos del Registro' : 'Agregar Nuevo Registro'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Equipo *</label>
@@ -545,7 +510,6 @@ export default function NuevoRegistro() {
           </div>
         </div>
 
-        {/* SECCIÓN ESTIBADOR */}
         <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
           <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2 text-sm">
             <span className="w-2 h-2 bg-green-600 rounded-full"></span> Registro del Estibador (Independiente)
@@ -577,8 +541,8 @@ export default function NuevoRegistro() {
           </div>
         </div>
 
-        {/* ✅ SECCIÓN DE ESCANEO OCR */}
-        <div className="mt-6 p-4 bg-purple-50 rounded-lg border-2 border-dashed border-purple-300">
+        {/* ✅ BOTÓN DE ESCANEO OCR */}
+        <div className="mb-4 p-4 bg-purple-50 rounded-lg border-2 border-dashed border-purple-300">
           <div className="flex items-center justify-between">
             <div>
               <h4 className="font-semibold text-purple-900 flex items-center gap-2">
@@ -615,7 +579,7 @@ export default function NuevoRegistro() {
 
         {/* ✅ PANEL DE DATOS EXTRAÍDOS */}
         {ocrData && (
-          <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+          <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
             <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
               <CheckCircle className="w-5 h-5" />
               Datos Extraídos del Recibo
@@ -636,20 +600,15 @@ export default function NuevoRegistro() {
               </button>
             </div>
           </div>
-        )}   
+        )}
 
-        {/* ✅ SECCIÓN DE CARGA DE IMAGEN MANUAL */}
         <div className="mt-6 p-4 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Camera className="w-5 h-5 text-blue-600" />
               <h4 className="font-semibold text-slate-900">Evidencia Fotográfica del Recibo</h4>
             </div>
-            {imagenPreview && (
-              <button onClick={() => { setImagenPreview(''); setImagenFile(null) }} className="text-red-600 hover:text-red-800 text-sm">
-                Quitar imagen
-              </button>
-            )}
+            {imagenPreview && <button onClick={() => { setImagenPreview(''); setImagenFile(null) }} className="text-red-600 hover:text-red-800 text-sm">Quitar imagen</button>}
           </div>
           {imagenPreview ? (
             <div className="relative">
@@ -676,10 +635,7 @@ export default function NuevoRegistro() {
               <Save className="w-4 h-4" /> {editandoId !== null ? 'Actualizar' : 'Agregar'}
             </button>
             {editandoId !== null && (
-              <button onClick={() => { 
-                setEditandoId(null); 
-                setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' }) 
-              }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
+              <button onClick={() => { setEditandoId(null); setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' }) }} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
                 <X className="w-4 h-4" /> Cancelar
               </button>
             )}
@@ -687,7 +643,6 @@ export default function NuevoRegistro() {
         )}
       </div>
 
-      {/* TABLA DE REGISTROS AGREGADOS */}
       {registros.length > 0 && !modoEdicion && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Registros Agregados ({registros.length})</h3>
@@ -713,11 +668,7 @@ export default function NuevoRegistro() {
                     <td className="px-3 py-3 text-sm">{reg.equipo}</td>
                     <td className="px-3 py-3 text-sm">{reg.operador || '-'}</td>
                     <td className="px-3 py-3 text-sm">{reg.estibador || '-'}</td>
-                    <td className="px-3 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                        {reg.fase || '-'}
-                      </span>
-                    </td>
+                    <td className="px-3 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{reg.fase || '-'}</span></td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.hInicial || '-'}</td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.hFinal || '-'}</td>
                     <td className="px-3 py-3 text-sm font-mono">{reg.nRecibo || '-'}</td>
@@ -736,18 +687,12 @@ export default function NuevoRegistro() {
         </div>
       )}
 
-      {/* BOTÓN FINAL DE GUARDADO */}
       <div className="flex justify-end">
-        <button 
-          onClick={guardarEnSupabase} 
-          disabled={guardando || subiendoImagen} 
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
-        >
+        <button onClick={guardarEnSupabase} disabled={guardando || subiendoImagen} className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50">
           <FileText className="w-5 h-5" /> {guardando ? 'Guardando...' : (modoEdicion ? 'Actualizar Registro' : 'Guardar y Ver en Historial')}
         </button>
       </div>
 
-      {/* MODAL DE VISTA PREVIA */}
       {mostrandoPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -775,11 +720,7 @@ export default function NuevoRegistro() {
                   </div>
                 </div>
               )}
-              {mostrandoPreview.observaciones && (
-                <div className="text-sm">
-                  <span className="text-slate-600">Observaciones Operador:</span> <strong>{mostrandoPreview.observaciones}</strong>
-                </div>
-              )}
+              {mostrandoPreview.observaciones && <div className="text-sm"><span className="text-slate-600">Observaciones Operador:</span> <strong>{mostrandoPreview.observaciones}</strong></div>}
             </div>
           </div>
         </div>
