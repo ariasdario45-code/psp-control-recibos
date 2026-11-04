@@ -29,7 +29,7 @@ export default function OCRScanner({ onExtracted, onCancel }: OCRScannerProps) {
       setPreview(previewUrl)
       setProgress(10)
 
-      // Preprocesar
+      // Preprocesar imagen para mejorar OCR
       setStatus('Mejorando imagen...')
       const processedImage = await ImageProcessor.process(file)
       setProgress(30)
@@ -41,6 +41,8 @@ export default function OCRScanner({ onExtracted, onCancel }: OCRScannerProps) {
       await worker.setParameters({
         tessedit_pageseg_mode: '6',
         preserve_interword_spaces: '1',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ÁÉÍÓÚÑáéíóúñ.,-/: ',
+        tessedit_enable_dict: '0',
       })
 
       const { data } = await worker.recognize(processedImage)
