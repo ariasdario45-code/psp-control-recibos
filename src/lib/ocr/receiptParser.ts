@@ -1,3 +1,24 @@
+/**
+ * Parser profesional de recibos COREMAR con arquitectura tipo Lovable
+ * - Extracción dirigida por rótulos
+ * - Patrones regex de respaldo
+ * - Sistema de scoring y respaldo de campos
+ */
+
+import { buscarTipoCarga, detectarFormatoEquipo, extraerDetenciones } from './local/catalogo-estatico'
+import { buscarMotonaveEnBD, buscarEquipoEnBD, buscarOperadorEnBD } from './local/busquedaDinamica'
+
+// ============================================
+// INTERFACES (Mantenemos la que ya usa la app)
+// ============================================
+
+export interface CampoRespaldo {
+  valor: string | null
+  texto_original: string | null
+  confianza: 'alta' | 'media' | 'baja' | null
+  requiere_revision: boolean
+}
+
 export interface ExtractedData {
   numeroRecibo?: string
   fecha?: string
@@ -20,203 +41,220 @@ export interface ExtractedData {
     detenciones: number
     operador: number
     tipoCarga: number
+    observaciones: number
+  }
+  texto_crudo?: string
+  verificar?: string[]
+  respaldo_campos?: Record<string, CampoRespaldo>
+}
+
+// ============================================
+// DICCIONARIO Y RÓTULOS (Arquitectura Lovable)
+// ============================================
+
+const ROTULOS_CAMPO: Record<string, string[]> = {
+  numeroRecibo: ["ORDEN DE SERVICIO", "No.", "N°", "NUMERO", "RECIBO"],
+  fecha: ["Fecha de solicitud", "Fecha", "FECHA"],
+  proveedor: ["Proveedor", "Pvendor", "PROVEEDOR"],
+  motonave: ["Motonave", "MOTO NAVE", "DATOS DE LA MOTO NAVE", "MOTONAVE"],
+  tipoCarga: ["TIPO DE PRODUCTO", "TIPO DE CARGA", "PRODUCTO", "CARGA"],
+  equipo: ["EQUIPO", "EQUIP", "EQUIPMENT"],
+  horaInicio: ["HORA INICIO", "HORA INICIAL", "H.INICIO"],
+  horaFinal: ["HORA FINAL", "HORA FIN", "H.FINAL"],
+  detenciones: ["DETENCIONES", "DETENCION", "STOPPAGES"],
+  operador: ["DATOS DE QUIEN PRESTA EL SERVICIO", "Nombre", "FIRMA DEL REPRESENTANTE", "NOMBRE"],
+  observaciones: ["OBSERVACIONES", "OBSERVACIÓN", "OBSERVACION"]
+}
+
+const PATRONES = {
+  numeroRecibo: /\b(\d{5})\b/,
+  fecha: /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,
+  hora: /(\d{1,2}:\d{2})/,
+  detenciones: /(\d+\s*(?:HORA|HR|HORAS)\s*[A-ZÁÉÍÓÚÑa-záéíóúñ\s]{3,30})/i,
+  operador: /Nombre[:\s]+([A-Za-z\s]{5,40})/i,
+  observaciones: /OBSERVACIONES[:\s]+([^\n]{5,100})/i
+}
+
+// ============================================
+// FUNCIONES AUXILIARES
+// ============================================
+
+function crearRespaldo(valor: string | null, original: string | null, score: number): CampoRespaldo {
+  return {
+    valor: valor,
+    texto_original: original,
+    confianza: score >= 90 ? 'alta' : score > 70 ? 'media' : 'baja',
+    requiere_revision: score < 90
   }
 }
 
+function extraerPorRotulo(texto: string, campo: keyof typeof ROTULOS_CAMPO): { valor: string | null; original: string | null } {
+  for (const rotulo of ROTULOS_CAMPO[campo] ?? []) {
+    const re = new RegExp(
+      `(?:^|[\\s|;])${rotulo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:NO\\.?|N[º°]\\.?|#)?\\s*[:：=]?\\s*([^\\n|;]+)`,
+      "i"
+    )
+    const m = texto.match(re)
+    if (!m?.[1]) continue
+    const valor = m[1].replace(/[|;.\s]+$/, "").trim()
+    if (!valor || valor.length < 2 || !/[\p{L}\d]/u.test(valor)) continue
+    // Evitar que el valor sea otro rótulo
+    if (Object.values(ROTULOS_CAMPO).flat().some((r) => new RegExp(`^${r}$`, "i").test(valor))) continue
+    return { valor: valor.toUpperCase(), original: m[0].trim() }
+  }
+  return { valor: null, original: null }
+}
+
+function extraerCampoRegex(texto: string, patron: RegExp): { valor: string | null; original: string | null } {
+  const match = texto.match(patron)
+  if (match) {
+    for (let i = 1; i < match.length; i++) {
+      if (match[i] !== undefined && match[i].trim() !== '') {
+        return { valor: match[i].trim(), original: match[0].trim() }
+      }
+    }
+    return { valor: match[0].trim(), original: match[0].trim() }
+  }
+  return { valor: null, original: null }
+}
+
+// ============================================
+// CLASE PRINCIPAL (Compatible con la app)
+// ============================================
+
 export class ReceiptParser {
-  static parse(text: string, confidence: number): ExtractedData {
-    const result: ExtractedData = {
+  static async parse(texto: string, _confianzaOCR: number): Promise<ExtractedData> {
+    const resultado: ExtractedData = {
       confidence: {
-        numeroRecibo: 0,
-        fecha: 0,
-        proveedor: 0,
-        motonave: 0,
-        equipo: 0,
-        horas: 0,
-        detenciones: 0,
-        operador: 0,
-        tipoCarga: 0,
+        numeroRecibo: 0, fecha: 0, proveedor: 0, motonave: 0,
+        equipo: 0, horas: 0, detenciones: 0, operador: 0, tipoCarga: 0, observaciones: 0,
       },
+      texto_crudo: texto,
+      verificar: [],
+      respaldo_campos: {}
     }
 
-    const upperText = text.toUpperCase()
-    console.log('🔍 Texto OCR completo:', text)
-    console.log('🔍 Texto en mayúsculas:', upperText)
+    // 1. NÚMERO DE RECIBO
+    const nrRot = extraerPorRotulo(texto, 'numeroRecibo')
+    const nrPat = extraerCampoRegex(texto, PATRONES.numeroRecibo)
+    const nr = nrRot.valor ? nrRot : nrPat
+    resultado.numeroRecibo = nr.valor || undefined
+    resultado.confidence.numeroRecibo = nr.valor ? 90 : 0
+    if (resultado.respaldo_campos) resultado.respaldo_campos['numeroRecibo'] = crearRespaldo(nr.valor, nr.original, nr.valor ? 90 : 0)
+    if (nr.valor && resultado.verificar) resultado.verificar.push('numeroRecibo')
 
-    // 1. NÚMERO DE RECIBO (5 dígitos en esquina superior derecha)
-    // Patrón: busca 5 dígitos consecutivos, preferiblemente al inicio
-    const reciboPatterns = [
-      /^(\d{5})/,  // Al inicio del texto
-      /(\d{5})/,   // En cualquier parte
-    ]
-    for (const pattern of reciboPatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        result.numeroRecibo = match[1]
-        result.confidence.numeroRecibo = 85
-        console.log('✅ N° Recibo:', result.numeroRecibo)
-        break
-      }
+    // 2. FECHA
+    const fechaRot = extraerPorRotulo(texto, 'fecha')
+    const fechaPat = extraerCampoRegex(texto, PATRONES.fecha)
+    const fecha = fechaRot.valor ? fechaRot : fechaPat
+    if (fecha.valor) {
+      resultado.fecha = this.normalizeDate(fecha.valor)
+      resultado.confidence.fecha = 85
+      if (resultado.respaldo_campos) resultado.respaldo_campos['fecha'] = crearRespaldo(resultado.fecha, fecha.original, 85)
+      if (resultado.verificar) resultado.verificar.push('fecha')
     }
 
-    // 2. FECHA (formatos: 3/11/26, 03/11/26, 3-11-26, 03 NOV 2026)
-    const fechaPatterns = [
-      /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,  // 3/11/26 o 03-11-26
-      /(\d{1,2}\s+(?:ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)\.?\s*\d{2,4})/i,  // 03 NOV 2026
-    ]
-    for (const pattern of fechaPatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        result.fecha = this.normalizeDate(match[1])
-        result.confidence.fecha = 85
-        console.log('✅ Fecha:', result.fecha)
-        break
-      }
+    // 3. PROVEEDOR
+    const provRot = extraerPorRotulo(texto, 'proveedor')
+    if (provRot.valor || (texto.toUpperCase().includes('CARGO') && texto.toUpperCase().includes('PORT'))) {
+      resultado.proveedor = 'CARGO PORT'
+      resultado.confidence.proveedor = 95
+      if (resultado.respaldo_campos) resultado.respaldo_campos['proveedor'] = crearRespaldo('CARGO PORT', provRot.original || 'CARGO PORT', 95)
+    } else if (provRot.valor) {
+      resultado.proveedor = provRot.valor
+      resultado.confidence.proveedor = 70
+      if (resultado.respaldo_campos) resultado.respaldo_campos['proveedor'] = crearRespaldo(provRot.valor, provRot.original, 70)
+      if (resultado.verificar) resultado.verificar.push('proveedor')
     }
 
-    // 3. PROVEEDOR (busca "Cargo Port" o "CARGO PORT")
-    if (upperText.includes('CARGO') && upperText.includes('PORT')) {
-      result.proveedor = 'CARGO PORT'
-      result.confidence.proveedor = 95
-      console.log('✅ Proveedor:', result.proveedor)
-    } else if (upperText.includes('CARGO')) {
-      result.proveedor = 'CARGO PORT'
-      result.confidence.proveedor = 80
-      console.log('✅ Proveedor (parcial):', result.proveedor)
+    // 4. MOTONAVE
+    const mnRot = extraerPorRotulo(texto, 'motonave')
+    if (mnRot.valor) {
+      const busqueda = await buscarMotonaveEnBD(mnRot.valor)
+      resultado.motonave = busqueda.encontrado ? busqueda.nombre : mnRot.valor
+      resultado.confidence.motonave = busqueda.encontrado ? busqueda.confianza : 60
+      if (resultado.respaldo_campos) resultado.respaldo_campos['motonave'] = crearRespaldo(resultado.motonave, mnRot.original, resultado.confidence.motonave)
+      if (resultado.verificar && resultado.confidence.motonave < 90) resultado.verificar.push('motonave')
     }
 
-    // 4. MOTONAVE (después de "Motonave:" o "MOTO NAVE")
-    // Patrones reales: "Great fortune", "HONG RUN 16", "ECE NOR BAYAKTAR"
-    const motonavePatterns = [
-      /Motonave[:\s]+([A-Za-z\s]{5,40})/i,
-      /MOTO\s+NAVE[:\s]+([A-Za-z\s]{5,40})/i,
-      /(Great\s+Fortune)/i,
-      /(HONG\s+RUN\s+\d+)/i,
-      /(ECE\s+NOR\s+\w+)/i,
-      /(CCE\s+NOR)/i,
-    ]
-    for (const pattern of motonavePatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        result.motonave = match[1].trim()
-        result.confidence.motonave = 75
-        console.log('✅ Motonave:', result.motonave)
-        break
-      }
+    // 5. TIPO DE CARGA
+    const tc = buscarTipoCarga(texto)
+    if (tc) {
+      resultado.tipoCarga = tc.nombre
+      resultado.confidence.tipoCarga = tc.confianza
+      if (resultado.respaldo_campos) resultado.respaldo_campos['tipoCarga'] = crearRespaldo(tc.nombre, tc.nombre, tc.confianza)
     }
 
-    // 5. TIPO DE CARGA (checkbox marcado)
-    const tiposCarga = [
-      { nombre: 'ACERO', patterns: [/ACERO/i, /acer/i] },
-      { nombre: 'MAIZ', patterns: [/MAIZ/i, /MAÍZ/i] },
-      { nombre: 'TRIGO', patterns: [/TRIGO/i] },
-      { nombre: 'ARROZ', patterns: [/ARROZ/i] },
-      { nombre: 'FERTILIZANTE', patterns: [/FERTILIZANTE/i] },
-      { nombre: 'COOKIE', patterns: [/COOKIE/i] },
-      { nombre: 'COQUE', patterns: [/COQUE/i] },
-      { nombre: 'TORTA', patterns: [/TORTA/i] },
-      { nombre: 'GLUTEN', patterns: [/GLUTEN/i] },
-      { nombre: 'DESTILADO', patterns: [/DESTILADO/i] },
-      { nombre: 'P. INDUSTRIAL', patterns: [/P\.\s*INDUSTRIAL/i] },
-      { nombre: 'TUBERIA', patterns: [/TUBERIA/i] },
-      { nombre: 'BARREDURAS', patterns: [/BARREDURAS/i] },
-      { nombre: 'CONTENEDORES', patterns: [/CONTENEDORES/i] },
-      { nombre: 'CARGA GENERAL', patterns: [/CARGA GENERAL/i] },
-    ]
+    // 6. EQUIPO
+    const eq = detectarFormatoEquipo(texto)
+    if (eq) {
+      const busqueda = await buscarEquipoEnBD(eq.valor)
+      resultado.equipo = busqueda.encontrado ? busqueda.nombre : eq.valor
+      resultado.confidence.equipo = busqueda.encontrado ? busqueda.confianza : 60
+      if (resultado.respaldo_campos) resultado.respaldo_campos['equipo'] = crearRespaldo(resultado.equipo, eq.valor, resultado.confidence.equipo)
+      if (resultado.verificar && resultado.confidence.equipo < 90) resultado.verificar.push('equipo')
+    }
+
+    // 7. HORAS
+    const hiRot = extraerPorRotulo(texto, 'horaInicio')
+    const hfRot = extraerPorRotulo(texto, 'horaFinal')
+    const horasPat = extraerCampoRegex(texto, /(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/)
     
-    for (const tipo of tiposCarga) {
-      for (const pattern of tipo.patterns) {
-        if (pattern.test(text)) {
-          result.tipoCarga = tipo.nombre
-          result.confidence.tipoCarga = 90
-          console.log('✅ Tipo Carga:', result.tipoCarga)
-          break
-        }
+    if (horasPat.valor && horasPat.original) {
+      const partes = horasPat.valor.split(/\s+/)
+      resultado.horaInicio = this.normalizeTime(partes[0])
+      resultado.horaFinal = this.normalizeTime(partes[1])
+      resultado.confidence.horas = 90
+      if (resultado.respaldo_campos) {
+        resultado.respaldo_campos['horaInicio'] = crearRespaldo(resultado.horaInicio, horasPat.original, 90)
+        resultado.respaldo_campos['horaFinal'] = crearRespaldo(resultado.horaFinal, horasPat.original, 90)
       }
-      if (result.tipoCarga) break
-    }
-
-    // 6. EQUIPO (formato: TC-02, CL-1611, 1608, etc.)
-    // Busca patrones como "TC-02", "TC 02", "CL-1611", "1608"
-    const equipoPatterns = [
-      /(TC[-\s]?\d{2})/i,  // TC-02, TC 02, TC02
-      /(CL[-\s]?\d{4})/i,  // CL-1611
-      /\b(\d{4})\b/,       // 1608
-    ]
-    for (const pattern of equipoPatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        result.equipo = match[1].trim().toUpperCase()
-        result.confidence.equipo = 85
-        console.log('✅ Equipo:', result.equipo)
-        break
+    } else {
+      if (hiRot.valor) {
+        resultado.horaInicio = this.normalizeTime(hiRot.valor)
+        resultado.confidence.horas = Math.max(resultado.confidence.horas, 70)
+        if (resultado.respaldo_campos) resultado.respaldo_campos['horaInicio'] = crearRespaldo(resultado.horaInicio, hiRot.original, 70)
+        if (resultado.verificar) resultado.verificar.push('horaInicio')
+      }
+      if (hfRot.valor) {
+        resultado.horaFinal = this.normalizeTime(hfRot.valor)
+        resultado.confidence.horas = Math.max(resultado.confidence.horas, 70)
+        if (resultado.respaldo_campos) resultado.respaldo_campos['horaFinal'] = crearRespaldo(resultado.horaFinal, hfRot.original, 70)
+        if (resultado.verificar) resultado.verificar.push('horaFinal')
       }
     }
 
-    // 7. HORAS (busca pares de horas en formato HH:MM)
-    // Patrones: "7:30 19:30", "07:30 19:30", "7:30" y "19:30" separados
-    const horaPatterns = [
-      /(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/,  // 7:30 19:30
-      /(\d{1,2}:\d{2})/,  // Una sola hora
-    ]
-    
-    const horasEncontradas: string[] = []
-    for (const pattern of horaPatterns) {
-      const matches = text.matchAll(new RegExp(pattern.source, 'g'))
-      for (const match of matches) {
-        horasEncontradas.push(match[1])
-      }
-    }
-    
-    if (horasEncontradas.length >= 2) {
-      result.horaInicio = this.normalizeTime(horasEncontradas[0])
-      result.horaFinal = this.normalizeTime(horasEncontradas[1])
-      result.confidence.horas = 90
-      console.log('✅ Horas:', result.horaInicio, '-', result.horaFinal)
-    } else if (horasEncontradas.length === 1) {
-      result.horaInicio = this.normalizeTime(horasEncontradas[0])
-      result.confidence.horas = 70
-      console.log('✅ Hora Inicio:', result.horaInicio)
+    // 8. DETENCIONES
+    const det = extraerDetenciones(texto)
+    if (det) {
+      resultado.detenciones = det.detenciones
+      resultado.confidence.detenciones = det.confianza
+      if (resultado.respaldo_campos) resultado.respaldo_campos['detenciones'] = crearRespaldo(det.detenciones, det.detenciones, det.confianza)
     }
 
-    // 8. DETENCIONES (busca "1H", "1 HR", "1 HORA")
-    const detencionesPatterns = [
-      /(1\s*H\s*(?:ALIMENTO|HSEQ|ALIM))/i,
-      /(1\s*HR\s*\w+)/i,
-      /(1\s*HORA\s*\w+)/i,
-      /(\d+\s*H\s*\w+)/i,
-    ]
-    for (const pattern of detencionesPatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        result.detenciones = match[1].trim().toUpperCase()
-        result.confidence.detenciones = 85
-        console.log('✅ Detenciones:', result.detenciones)
-        break
-      }
+    // 9. OPERADOR
+    const opRot = extraerPorRotulo(texto, 'operador')
+    const opPat = extraerCampoRegex(texto, PATRONES.operador)
+    const op = opRot.valor ? opRot : opPat
+    if (op.valor) {
+      const busqueda = await buscarOperadorEnBD(op.valor)
+      resultado.operador = busqueda.encontrado ? busqueda.nombre : op.valor
+      resultado.confidence.operador = busqueda.encontrado ? busqueda.confianza : 60
+      if (resultado.respaldo_campos) resultado.respaldo_campos['operador'] = crearRespaldo(resultado.operador, op.original, resultado.confidence.operador)
+      if (resultado.verificar && resultado.confidence.operador < 90) resultado.verificar.push('operador')
     }
 
-    // 9. OPERADOR (después de "Nombre:")
-    const operadorPatterns = [
-      /Nombre[:\s]+([A-Za-z\s]{5,40})/i,
-      /(Genes\s+\w+)/i,
-      /(Martin\s+\w+)/i,
-      /(David\s+\w+)/i,
-      /(Joel\s+\w+)/i,
-      /(Leonardo\s+\w+)/i,
-    ]
-    for (const pattern of operadorPatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        result.operador = match[1].trim()
-        result.confidence.operador = 75
-        console.log('✅ Operador:', result.operador)
-        break
-      }
+    // 10. OBSERVACIONES
+    const obs = extraerCampoRegex(texto, PATRONES.observaciones)
+    if (obs.valor) {
+      resultado.observaciones = obs.valor
+      resultado.confidence.observaciones = 75
+      if (resultado.respaldo_campos) resultado.respaldo_campos['observaciones'] = crearRespaldo(obs.valor, obs.original, 75)
+      if (resultado.verificar) resultado.verificar.push('observaciones')
     }
 
-    console.log('📊 Resultado final:', result)
-    return result
+    console.log('📊 Resultado Parser Profesional:', resultado)
+    return resultado
   }
 
   private static normalizeDate(dateStr: string): string {
@@ -225,8 +263,6 @@ export class ReceiptParser {
       'MAY': '05', 'JUN': '06', 'JUL': '07', 'AGO': '08',
       'SEP': '09', 'OCT': '10', 'NOV': '11', 'DIC': '12'
     }
-    
-    // Formato: 03 NOV 2026
     const monthMatch = dateStr.match(/(\d{1,2})\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)\.?\s*(\d{2,4})/i)
     if (monthMatch) {
       const day = monthMatch[1].padStart(2, '0')
@@ -235,8 +271,6 @@ export class ReceiptParser {
       if (year.length === 2) year = `20${year}`
       return `${year}-${month}-${day}`
     }
-    
-    // Formato: 3/11/26 o 03-11-26
     const parts = dateStr.split(/[-/]/)
     if (parts.length === 3) {
       let [day, month, year] = parts

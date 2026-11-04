@@ -1,5 +1,12 @@
+/**
+ * Preprocesamiento de imagen profesional (Inspirado en Lovable)
+ * - Escala lado corto a 2000px
+ * - Contraste suave (1.1)
+ * - Prueba rotación 90° si es vertical
+ */
+
 export class ImageProcessor {
-  static async process(file: File): Promise<string> {
+  static async process(file: File): Promise<{ src: string; grados: number }[]> {
     return new Promise((resolve, reject) => {
       const img = new Image()
       const reader = new FileReader()
@@ -9,41 +16,34 @@ export class ImageProcessor {
       }
       
       img.onload = () => {
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')!
-        
-        // Escalar a tamaño óptimo para OCR (ancho 2000px)
-        const maxWidth = 2000
-        const scale = Math.min(maxWidth / img.width, 1)
-        canvas.width = img.width * scale
-        canvas.height = img.height * scale
-        
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        
-        // Obtener datos de píxeles
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const data = imageData.data
-        
-        // 1. Convertir a escala de grises (SUAVE)
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-          data[i] = avg
-          data[i + 1] = avg
-          data[i + 2] = avg
+        try {
+          const corto = Math.min(img.naturalWidth, img.naturalHeight)
+          const largo = Math.max(img.naturalWidth, img.naturalHeight)
+          const escala = Math.min(Math.max(1, 2000 / corto), 4000 / largo)
+          const w = Math.round(img.naturalWidth * escala)
+          const h = Math.round(img.naturalHeight * escala)
+          
+          const render = (grados: number) => {
+            const c = document.createElement('canvas')
+            const rot = grados % 180 !== 0
+            c.width = rot ? h : w
+            c.height = rot ? w : h
+            const ctx = c.getContext('2d')!
+            ctx.filter = 'contrast(1.1)'
+            ctx.translate(c.width / 2, c.height / 2)
+            ctx.rotate((grados * Math.PI) / 180)
+            ctx.drawImage(img, -w / 2, -h / 2, w, h)
+            return { src: c.toDataURL('image/png'), grados }
+          }
+          
+          const out = [render(0)]
+          if (h > w) out.push(render(90)) // Agregar variante vertical si es necesario
+          
+          resolve(out)
+        } catch (e) {
+          console.warn('[OCR] Preprocesamiento falló, usando original:', e)
+          resolve([{ src: img.src, grados: 0 }])
         }
-        
-        // 2. Aumentar contraste MODERADO (NO binario)
-        const contrast = 1.5
-        const intercept = 128 * (1 - contrast)
-        for (let i = 0; i < data.length; i += 4) {
-          data[i] = Math.min(255, Math.max(0, data[i] * contrast + intercept))
-          data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * contrast + intercept))
-          data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * contrast + intercept))
-        }
-        
-        ctx.putImageData(imageData, 0, 0)
-        
-        resolve(canvas.toDataURL('image/png'))
       }
       
       img.onerror = reject
