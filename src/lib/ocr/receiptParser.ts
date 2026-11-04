@@ -40,71 +40,77 @@ export class ReceiptParser {
     }
 
     const upperText = text.toUpperCase()
-    console.log('🔍 Texto recibido para parsear:', text)
+    console.log('🔍 Texto OCR completo:', text)
+    console.log('🔍 Texto en mayúsculas:', upperText)
 
-    // 1. NÚMERO DE RECIBO (5 dígitos)
-    const reciboMatch = text.match(/\b(\d{5})\b/)
-    if (reciboMatch) {
-      result.numeroRecibo = reciboMatch[1]
-      result.confidence.numeroRecibo = 90
-      console.log('✅ N° Recibo detectado:', result.numeroRecibo)
+    // 1. NÚMERO DE RECIBO (5 dígitos en esquina superior derecha)
+    // Patrón: busca 5 dígitos consecutivos, preferiblemente al inicio
+    const reciboPatterns = [
+      /^(\d{5})/,  // Al inicio del texto
+      /(\d{5})/,   // En cualquier parte
+    ]
+    for (const pattern of reciboPatterns) {
+      const match = text.match(pattern)
+      if (match) {
+        result.numeroRecibo = match[1]
+        result.confidence.numeroRecibo = 85
+        console.log('✅ N° Recibo:', result.numeroRecibo)
+        break
+      }
     }
 
-    // 2. FECHA (múltiples formatos tolerantes)
-    // Busca: "26-10-26", "26/10/26", "2 OCT. 2026", "26 OCT 2026"
+    // 2. FECHA (formatos: 3/11/26, 03/11/26, 3-11-26, 03 NOV 2026)
     const fechaPatterns = [
-      /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,  // 26-10-26
-      /(\d{1,2}\s+(?:OCT|NOV|DIC|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP)\.?\s*\d{2,4})/i,  // 2 OCT. 2026
-      /(?:Fecha|FE)[^0-9]*(\d{1,2}[-/]\d{1,2})/i,  // FE 26-10
+      /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,  // 3/11/26 o 03-11-26
+      /(\d{1,2}\s+(?:ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)\.?\s*\d{2,4})/i,  // 03 NOV 2026
     ]
     for (const pattern of fechaPatterns) {
       const match = text.match(pattern)
       if (match) {
         result.fecha = this.normalizeDate(match[1])
         result.confidence.fecha = 85
-        console.log('✅ Fecha detectada:', result.fecha)
+        console.log('✅ Fecha:', result.fecha)
         break
       }
     }
 
-    // 3. PROVEEDOR (busca "CARGO PORT" o "CARGO" y "PORT" separados)
+    // 3. PROVEEDOR (busca "Cargo Port" o "CARGO PORT")
     if (upperText.includes('CARGO') && upperText.includes('PORT')) {
       result.proveedor = 'CARGO PORT'
       result.confidence.proveedor = 95
-      console.log('✅ Proveedor detectado:', result.proveedor)
-    } else {
-      const proveedorMatch = text.match(/(?:Proveedor|Pvendor)[^A-Z]*([A-ZÁÉÍÓÚÑa-záéíóúñ\s]{3,30})/i)
-      if (proveedorMatch) {
-        result.proveedor = proveedorMatch[1].trim().toUpperCase()
-        result.confidence.proveedor = 75
-        console.log('✅ Proveedor detectado:', result.proveedor)
-      }
+      console.log('✅ Proveedor:', result.proveedor)
+    } else if (upperText.includes('CARGO')) {
+      result.proveedor = 'CARGO PORT'
+      result.confidence.proveedor = 80
+      console.log('✅ Proveedor (parcial):', result.proveedor)
     }
 
-    // 4. MOTONAVE (tolerante a errores)
+    // 4. MOTONAVE (después de "Motonave:" o "MOTO NAVE")
+    // Patrones reales: "Great fortune", "HONG RUN 16", "ECE NOR BAYAKTAR"
     const motonavePatterns = [
-      /HONG\s+RUN\s+\d+/i,
-      /HONG\s+BUN\s+\d+/i,
-      /ECE\s+NOR\s+\w+/i,
-      /CCE\s+NOR/i,
-      /Motonave[^A-Z]*([A-ZÁÉÍÓÚÑ0-9\s]{3,40})/i,
+      /Motonave[:\s]+([A-Za-z\s]{5,40})/i,
+      /MOTO\s+NAVE[:\s]+([A-Za-z\s]{5,40})/i,
+      /(Great\s+Fortune)/i,
+      /(HONG\s+RUN\s+\d+)/i,
+      /(ECE\s+NOR\s+\w+)/i,
+      /(CCE\s+NOR)/i,
     ]
     for (const pattern of motonavePatterns) {
       const match = text.match(pattern)
       if (match) {
-        result.motonave = match[0].trim().toUpperCase().replace(/No\..*$/i, '').trim()
-        result.confidence.motonave = 80
-        console.log('✅ Motonave detectada:', result.motonave)
+        result.motonave = match[1].trim()
+        result.confidence.motonave = 75
+        console.log('✅ Motonave:', result.motonave)
         break
       }
     }
 
-    // 5. TIPO DE CARGA
+    // 5. TIPO DE CARGA (checkbox marcado)
     const tiposCarga = [
       { nombre: 'ACERO', patterns: [/ACERO/i, /acer/i] },
       { nombre: 'MAIZ', patterns: [/MAIZ/i, /MAÍZ/i] },
       { nombre: 'TRIGO', patterns: [/TRIGO/i] },
-      { nombre: 'ARROZ', patterns: [/ARROZ/i, /aroz/i] },
+      { nombre: 'ARROZ', patterns: [/ARROZ/i] },
       { nombre: 'FERTILIZANTE', patterns: [/FERTILIZANTE/i] },
       { nombre: 'COOKIE', patterns: [/COOKIE/i] },
       { nombre: 'COQUE', patterns: [/COQUE/i] },
@@ -122,78 +128,90 @@ export class ReceiptParser {
       for (const pattern of tipo.patterns) {
         if (pattern.test(text)) {
           result.tipoCarga = tipo.nombre
-          result.confidence.tipoCarga = 85
-          console.log('✅ Tipo de carga detectado:', result.tipoCarga)
+          result.confidence.tipoCarga = 90
+          console.log('✅ Tipo Carga:', result.tipoCarga)
           break
         }
       }
       if (result.tipoCarga) break
     }
 
-    // 6. EQUIPO (4 dígitos)
-    const equipoMatch = text.match(/\b((?:CL-)?\d{4})\b/)
-    if (equipoMatch && equipoMatch[1] !== result.numeroRecibo) {
-      result.equipo = equipoMatch[1]
-      result.confidence.equipo = 85
-      console.log('✅ Equipo detectado:', result.equipo)
-    }
-
-    // 7. HORAS (busca CUALQUIER par de horas en el texto)
-    // Patrones: "07:30 14:30", "19:30 07:30", "07:35"
-    const horaPatterns = [
-      /(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/,  // Dos horas juntas
-      /(\d{1,2}:\d{2})/,  // Una sola hora
+    // 6. EQUIPO (formato: TC-02, CL-1611, 1608, etc.)
+    // Busca patrones como "TC-02", "TC 02", "CL-1611", "1608"
+    const equipoPatterns = [
+      /(TC[-\s]?\d{2})/i,  // TC-02, TC 02, TC02
+      /(CL[-\s]?\d{4})/i,  // CL-1611
+      /\b(\d{4})\b/,       // 1608
     ]
-    for (const pattern of horaPatterns) {
+    for (const pattern of equipoPatterns) {
       const match = text.match(pattern)
       if (match) {
-        if (match[2]) {
-          result.horaInicio = this.normalizeTime(match[1])
-          result.horaFinal = this.normalizeTime(match[2])
-        } else {
-          result.horaInicio = this.normalizeTime(match[1])
-        }
-        result.confidence.horas = 85
-        console.log('✅ Horas detectadas:', result.horaInicio, '-', result.horaFinal)
+        result.equipo = match[1].trim().toUpperCase()
+        result.confidence.equipo = 85
+        console.log('✅ Equipo:', result.equipo)
         break
       }
     }
 
-    // 8. DETENCIONES (busca "HR", "HORA", "1 HR", "1 HORA")
+    // 7. HORAS (busca pares de horas en formato HH:MM)
+    // Patrones: "7:30 19:30", "07:30 19:30", "7:30" y "19:30" separados
+    const horaPatterns = [
+      /(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/,  // 7:30 19:30
+      /(\d{1,2}:\d{2})/,  // Una sola hora
+    ]
+    
+    const horasEncontradas: string[] = []
+    for (const pattern of horaPatterns) {
+      const matches = text.matchAll(new RegExp(pattern.source, 'g'))
+      for (const match of matches) {
+        horasEncontradas.push(match[1])
+      }
+    }
+    
+    if (horasEncontradas.length >= 2) {
+      result.horaInicio = this.normalizeTime(horasEncontradas[0])
+      result.horaFinal = this.normalizeTime(horasEncontradas[1])
+      result.confidence.horas = 90
+      console.log('✅ Horas:', result.horaInicio, '-', result.horaFinal)
+    } else if (horasEncontradas.length === 1) {
+      result.horaInicio = this.normalizeTime(horasEncontradas[0])
+      result.confidence.horas = 70
+      console.log('✅ Hora Inicio:', result.horaInicio)
+    }
+
+    // 8. DETENCIONES (busca "1H", "1 HR", "1 HORA")
     const detencionesPatterns = [
-      /(\d+\s*(?:HORA|HR|HORAS)[^0-9]{3,30})/i,
-      /(1\s*HR\s+\w+)/i,
-      /(1\s*HORA\s+\w+)/i,
+      /(1\s*H\s*(?:ALIMENTO|HSEQ|ALIM))/i,
+      /(1\s*HR\s*\w+)/i,
+      /(1\s*HORA\s*\w+)/i,
+      /(\d+\s*H\s*\w+)/i,
     ]
     for (const pattern of detencionesPatterns) {
       const match = text.match(pattern)
       if (match) {
         result.detenciones = match[1].trim().toUpperCase()
         result.confidence.detenciones = 85
-        console.log('✅ Detenciones detectadas:', result.detenciones)
+        console.log('✅ Detenciones:', result.detenciones)
         break
       }
     }
 
-    // 9. OPERADOR (busca nombres comunes o "Nombre:")
+    // 9. OPERADOR (después de "Nombre:")
     const operadorPatterns = [
-      /(?:Nombre|none|Name)[^A-Z]*([A-ZÁÉÍÓÚÑa-záéíóúñ\s]{5,40})/i,
-      /(MARTIN\s+\w+)/i,
-      /(DAVID\s+\w+)/i,
-      /(JOEL\s+\w+)/i,
-      /(LEONARDO\s+\w+)/i,
+      /Nombre[:\s]+([A-Za-z\s]{5,40})/i,
+      /(Genes\s+\w+)/i,
+      /(Martin\s+\w+)/i,
+      /(David\s+\w+)/i,
+      /(Joel\s+\w+)/i,
+      /(Leonardo\s+\w+)/i,
     ]
     for (const pattern of operadorPatterns) {
       const match = text.match(pattern)
       if (match) {
-        let operador = match[1].trim()
-        operador = operador.replace(/(?:cargo|caro|ope)[^A-Z]*$/i, '').trim()
-        if (operador.length > 3 && operador.length < 40) {
-          result.operador = operador.toUpperCase()
-          result.confidence.operador = 75
-          console.log('✅ Operador detectado:', result.operador)
-          break
-        }
+        result.operador = match[1].trim()
+        result.confidence.operador = 75
+        console.log('✅ Operador:', result.operador)
+        break
       }
     }
 
@@ -202,14 +220,14 @@ export class ReceiptParser {
   }
 
   private static normalizeDate(dateStr: string): string {
-    // Manejar formatos como "2 OCT. 2026"
     const monthMap: { [key: string]: string } = {
       'ENE': '01', 'FEB': '02', 'MAR': '03', 'ABR': '04',
       'MAY': '05', 'JUN': '06', 'JUL': '07', 'AGO': '08',
       'SEP': '09', 'OCT': '10', 'NOV': '11', 'DIC': '12'
     }
     
-    const monthMatch = dateStr.match(/(\d{1,2})\s+(OCT|NOV|DIC|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP)\.?\s*(\d{2,4})/i)
+    // Formato: 03 NOV 2026
+    const monthMatch = dateStr.match(/(\d{1,2})\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)\.?\s*(\d{2,4})/i)
     if (monthMatch) {
       const day = monthMatch[1].padStart(2, '0')
       const month = monthMap[monthMatch[2].toUpperCase()]
@@ -218,7 +236,7 @@ export class ReceiptParser {
       return `${year}-${month}-${day}`
     }
     
-    // Formato numérico: 26-10-26
+    // Formato: 3/11/26 o 03-11-26
     const parts = dateStr.split(/[-/]/)
     if (parts.length === 3) {
       let [day, month, year] = parts
