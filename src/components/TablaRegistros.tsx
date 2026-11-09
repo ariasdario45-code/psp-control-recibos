@@ -415,17 +415,33 @@ export default function TablaRegistros() {
 
             <div className="flex gap-2">
               {/* Botón Agregar Fotos */}
-              <label className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
-                <ImageIcon className="w-4 h-4" />
-                Agregar Fotos
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))}
-                />
-              </label>
+           {/* Botón Tomar Foto */}
+<label className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
+  <ImageIcon className="w-4 h-4" />
+  Tomar Foto
+  <input 
+    type="file" 
+    accept="image/*"
+    capture="environment"
+    multiple 
+    className="hidden" 
+    onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))} 
+  />
+</label>
+
+{/* Botón Subir de Galería */}
+<label className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
+  <ImageIcon className="w-4 h-4" />
+  Galería
+  <input 
+    type="file" 
+    accept="image/*"
+    multiple 
+    className="hidden" 
+    onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))} 
+  />
+</label>
+              </div>
               {archivosNuevos.length > 0 && (
                 <button
                   onClick={subirFotosAdicionales}
@@ -684,6 +700,5 @@ export default function TablaRegistros() {
           </ul>
         </div>
       </div>
-    </div>
   )
 }
