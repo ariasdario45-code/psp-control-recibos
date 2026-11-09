@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { UserCheck, UserX, Plus, Save, X, Shield, Clock, Ban, CheckCircle } from 'lucide-react'
+import { UserCheck, UserX, Plus, Save, X, Shield, Clock, Ban, CheckCircle, Edit2, Trash2 } from 'lucide-react'
 
 interface Usuario {
   id: number
@@ -12,18 +12,21 @@ interface Usuario {
   fecha_registro: string
   fecha_habilitacion: string | null
   habilitado_por: string | null
+  contrasena?: string
 }
 
 export default function GestionUsuarios() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [cargando, setCargando] = useState(false)
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false)
+  const [usuarioEditando, setUsuarioEditando] = useState<Usuario | null>(null)
   const [formulario, setFormulario] = useState({
     codigo: '',
     nombre: '',
     email: '',
     rol: 'AUXILIAR' as 'ADMIN' | 'AUXILIAR',
     estado: 'PENDIENTE' as 'HABILITADO' | 'PENDIENTE' | 'BLOQUEADO',
+    contrasena: '',
   })
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
 
@@ -32,7 +35,7 @@ export default function GestionUsuarios() {
     const { data, error } = await supabase
       .from('usuarios')
       .select('*')
-      .order('id', { ascending: true })
+      .order('codigo', { ascending: true })
 
     if (error) {
       setMensaje({ texto: 'Error al cargar usuarios', tipo: 'error' })
@@ -72,6 +75,45 @@ export default function GestionUsuarios() {
     }
   }
 
+  const handleEditar = (usuario: Usuario) => {
+    setUsuarioEditando(usuario)
+    setFormulario({
+      codigo: usuario.codigo,
+      nombre: usuario.nombre,
+      email: usuario.email || '',
+      rol: usuario.rol,
+      estado: usuario.estado,
+      contrasena: '',
+    })
+    setMostrandoFormulario(true)
+  }
+
+  const handleEliminar = async (id: number, codigo: string) => {
+    // PROTECCIÓN: No permitir eliminar ADMIN001
+    if (codigo === 'ADMIN001') {
+      mostrarMensaje('❌ No se puede eliminar el usuario ADMIN001 (Super Administrador)', 'error')
+      return
+    }
+
+    if (!confirm(`¿Estás seguro de eliminar permanentemente al usuario ${codigo}?\n\nEsta acción no se puede deshacer.`)) {
+      return
+    }
+
+    setCargando(true)
+    const { error } = await supabase
+      .from('usuarios')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      mostrarMensaje('Error al eliminar: ' + error.message, 'error')
+    } else {
+      mostrarMensaje(`✅ Usuario ${codigo} eliminado correctamente`, 'exito')
+      await cargarUsuarios()
+    }
+    setCargando(false)
+  }
+
   const guardarNuevoUsuario = async () => {
     if (!formulario.codigo.trim() || !formulario.nombre.trim()) {
       mostrarMensaje('Código y nombre son obligatorios', 'error')
@@ -79,23 +121,56 @@ export default function GestionUsuarios() {
     }
 
     setCargando(true)
-    const { error } = await supabase
-      .from('usuarios')
-      .insert([{
-        ...formulario,
-        codigo: formulario.codigo.toUpperCase().trim(),
-      }])
+    
+    const userData = {
+      codigo: formulario.codigo.toUpperCase().trim(),
+      nombre: formulario.nombre,
+      email: formulario.email,
+      rol: formulario.rol,
+      estado: formulario.estado,
+      fecha_registro: new Date().toISOString(),
+    }
+
+    // Si es usuario nuevo, agregar contraseña
+    if (!usuarioEditando) {
+      if (!formulario.contrasena.trim()) {
+        mostrarMensaje('La contraseña es obligatoria para nuevos usuarios', 'error')
+        setCargando(false)
+        return
+      }
+      Object.assign(userData, { contrasena: formulario.contrasena })
+    }
+
+    let error
+    if (usuarioEditando) {
+      // Actualizar usuario existente
+      const { error: updateError } = await supabase
+        .from('usuarios')
+        .update(userData)
+        .eq('id', usuarioEditando.id)
+      error = updateError
+    } else {
+      // Crear nuevo usuario
+      const { error: insertError } = await supabase
+        .from('usuarios')
+        .insert([userData])
+      error = insertError
+    }
 
     if (error) {
       if (error.message.includes('unique')) {
         mostrarMensaje('Ese código ya existe. Usa otro diferente.', 'error')
       } else {
-        mostrarMensaje('Error al crear usuario: ' + error.message, 'error')
+        mostrarMensaje('Error: ' + error.message, 'error')
       }
     } else {
-      mostrarMensaje('Usuario creado correctamente', 'exito')
+      mostrarMensaje(
+        usuarioEditando ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
+        'exito'
+      )
       setMostrandoFormulario(false)
-      setFormulario({ codigo: '', nombre: '', email: '', rol: 'AUXILIAR', estado: 'PENDIENTE' })
+      setUsuarioEditando(null)
+      setFormulario({ codigo: '', nombre: '', email: '', rol: 'AUXILIAR', estado: 'PENDIENTE', contrasena: '' })
       await cargarUsuarios()
     }
     setCargando(false)
@@ -133,7 +208,11 @@ export default function GestionUsuarios() {
             <p className="text-slate-600">Administra los códigos de acceso de auxiliares y administradores</p>
           </div>
           <button
-            onClick={() => setMostrandoFormulario(true)}
+            onClick={() => {
+              setMostrandoFormulario(true)
+              setUsuarioEditando(null)
+              setFormulario({ codigo: '', nombre: '', email: '', rol: 'AUXILIAR', estado: 'PENDIENTE', contrasena: '' })
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             <Plus className="w-4 h-4" />
@@ -183,12 +262,14 @@ export default function GestionUsuarios() {
         </div>
       )}
 
-      {/* Formulario nuevo usuario */}
+      {/* Formulario nuevo usuario / Editar */}
       {mostrandoFormulario && (
         <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-200">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-900">Crear Nuevo Usuario</h3>
-            <button onClick={() => setMostrandoFormulario(false)} className="text-slate-500 hover:text-slate-700">
+            <h3 className="text-lg font-semibold text-slate-900">
+              {usuarioEditando ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
+            </h3>
+            <button onClick={() => { setMostrandoFormulario(false); setUsuarioEditando(null) }} className="text-slate-500 hover:text-slate-700">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -200,8 +281,9 @@ export default function GestionUsuarios() {
                 type="text"
                 value={formulario.codigo}
                 onChange={(e) => setFormulario(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
+                disabled={!!usuarioEditando}
                 placeholder="Ej: AUX005"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
               />
             </div>
             <div>
@@ -210,7 +292,7 @@ export default function GestionUsuarios() {
                 type="text"
                 value={formulario.nombre}
                 onChange={(e) => setFormulario(prev => ({ ...prev, nombre: e.target.value }))}
-                placeholder="Nombre del auxiliar"
+                placeholder="Nombre del usuario"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -235,6 +317,18 @@ export default function GestionUsuarios() {
                 <option value="ADMIN">ADMIN</option>
               </select>
             </div>
+            {!usuarioEditando && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña *</label>
+                <input
+                  type="password"
+                  value={formulario.contrasena}
+                  onChange={(e) => setFormulario(prev => ({ ...prev, contrasena: e.target.value }))}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Estado inicial</label>
               <select
@@ -256,10 +350,10 @@ export default function GestionUsuarios() {
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              {cargando ? 'Guardando...' : 'Crear Usuario'}
+              {cargando ? 'Guardando...' : (usuarioEditando ? 'Actualizar Usuario' : 'Crear Usuario')}
             </button>
             <button
-              onClick={() => setMostrandoFormulario(false)}
+              onClick={() => { setMostrandoFormulario(false); setUsuarioEditando(null) }}
               className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
             >
               <X className="w-4 h-4" />
@@ -318,25 +412,60 @@ export default function GestionUsuarios() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        {user.estado !== 'HABILITADO' && user.codigo !== 'ADMIN001' && (
+                        {/* Botón Editar */}
+                        <button
+                          onClick={() => handleEditar(user)}
+                          className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
+                          title="Editar usuario"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          Editar
+                        </button>
+
+                        {/* Botones de estado (solo si no es ADMIN001) */}
+                        {user.codigo !== 'ADMIN001' && (
+                          <>
+                            {user.estado !== 'HABILITADO' && (
+                              <button
+                                onClick={() => cambiarEstado(user.id, 'HABILITADO')}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition-colors"
+                                title="Habilitar"
+                              >
+                                <UserCheck className="w-3 h-3" />
+                                Habilitar
+                              </button>
+                            )}
+                            {user.estado !== 'BLOQUEADO' && (
+                              <button
+                                onClick={() => cambiarEstado(user.id, 'BLOQUEADO')}
+                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+                                title="Bloquear"
+                              >
+                                <UserX className="w-3 h-3" />
+                                Bloquear
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {/* Botón Eliminar (solo si no es ADMIN001) */}
+                        {user.codigo !== 'ADMIN001' && (
                           <button
-                            onClick={() => cambiarEstado(user.id, 'HABILITADO')}
-                            className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                            title="Habilitar"
+                            onClick={() => handleEliminar(user.id, user.codigo)}
+                            className="flex items-center gap-1 px-2 py-1 bg-red-700 text-white rounded text-xs hover:bg-red-800 transition-colors"
+                            title="Eliminar permanentemente"
                           >
-                            <UserCheck className="w-3 h-3" />
-                            Habilitar
+                            <Trash2 className="w-3 h-3" />
+                            Eliminar
                           </button>
                         )}
-                        {user.estado !== 'BLOQUEADO' && user.codigo !== 'ADMIN001' && (
-                          <button
-                            onClick={() => cambiarEstado(user.id, 'BLOQUEADO')}
-                            className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                            title="Bloquear"
-                          >
-                            <UserX className="w-3 h-3" />
-                            Bloquear
-                          </button>
+
+                        {/* Indicador de protegido */}
+                        {user.codigo === 'ADMIN001' && (
+                          <span className="flex items-center gap-1 px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs" title="Usuario protegido">
+                            <Shield className="w-3 h-3" />
+                            Protegido
+                          </span>
                         )}
                       </div>
                     </td>

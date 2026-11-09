@@ -1,105 +1,117 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Ship, LogIn, AlertCircle, CheckCircle } from 'lucide-react'
+import { Lock, User, AlertCircle } from 'lucide-react'
 
 export default function Login() {
+  const navigate = useNavigate()
   const { login } = useAuth()
-  const [codigo, setCodigo] = useState('')
+  
+  const [usuario, setUsuario] = useState('')
+  const [contrasena, setContrasena] = useState('')
+  const [error, setError] = useState('')
   const [cargando, setCargando] = useState(false)
-  const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!codigo.trim()) {
-      setMensaje({ texto: 'Ingresa tu código', tipo: 'error' })
-      return
-    }
-
+    setError('')
     setCargando(true)
-    setMensaje({ texto: '', tipo: '' })
 
-    const resultado = await login(codigo)
-
-    if (!resultado.exito) {
-      setMensaje({ texto: resultado.mensaje, tipo: 'error' })
+    try {
+      const exito = await login(usuario, contrasena)
+      
+      if (exito) {
+        navigate('/panel')
+      } else {
+        setError('❌ Usuario o contraseña incorrectos')
+      }
+    } catch (err) {
+      setError('❌ Error de conexión. Intenta de nuevo.')
+    } finally {
+      setCargando(false)
     }
-
-    setCargando(false)
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo y título */}
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+        {/* Logo y Título */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-2xl mb-4 shadow-lg">
-            <Ship className="w-12 h-12 text-white" />
+          <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">PSP - Control de Recibos</h1>
-          <p className="text-blue-200">Operaciones Portuarias</p>
+          <h1 className="text-3xl font-bold text-slate-900">PSP - Control de Recibos</h1>
+          <p className="text-slate-600 mt-2">Operaciones Portuarias</p>
         </div>
 
-        {/* Formulario */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2 text-center">Iniciar Sesión</h2>
-          <p className="text-slate-600 text-center mb-6 text-sm">
-            Ingresa tu código de auxiliar o administrador
-          </p>
-
-          {/* Mensaje de error/éxito */}
-          {mensaje.texto && (
-            <div className={`flex items-center gap-2 p-3 rounded-lg mb-4 ${
-              mensaje.tipo === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-            }`}>
-              {mensaje.tipo === 'error' ? (
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              ) : (
-                <CheckCircle className="w-5 h-5 flex-shrink-0" />
-              )}
-              <span className="text-sm">{mensaje.texto}</span>
+        {/* Formulario de Login */}
+        <form onSubmit={handleLogin} className="space-y-6">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-800">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Código de acceso
-              </label>
-              <input
-                type="text"
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-                placeholder="Ej: ADMIN001, AUX001"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg text-lg font-mono tracking-wider focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                autoFocus
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={cargando}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
-            >
-              <LogIn className="w-5 h-5" />
-              {cargando ? 'Verificando...' : 'Ingresar'}
-            </button>
-          </form>
-
-          {/* Ayuda */}
-          <div className="mt-6 pt-6 border-t border-slate-200">
-            <p className="text-xs text-slate-500 text-center mb-2">Códigos de prueba:</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-slate-100 rounded px-2 py-1 text-center font-mono">ADMIN001</div>
-              <div className="bg-slate-100 rounded px-2 py-1 text-center font-mono">AUX001</div>
-              <div className="bg-slate-100 rounded px-2 py-1 text-center font-mono">AUX002</div>
-              <div className="bg-slate-100 rounded px-2 py-1 text-center font-mono">AUX004 (pendiente)</div>
-            </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
+              <User className="w-4 h-4" />
+              Usuario
+            </label>
+            <input
+              type="text"
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value.toUpperCase())}
+              placeholder="Ej: ADMIN001"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              autoComplete="username"
+            />
           </div>
-        </div>
 
-        <p className="text-center text-blue-200 text-xs mt-6">
-          © 2026 PSP - Sistema de Control de Recibos
-        </p>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
+              <Lock className="w-4 h-4" />
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={contrasena}
+              onChange={(e) => setContrasena(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              autoComplete="current-password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={cargando || !usuario || !contrasena}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2"
+          >
+            {cargando ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Verificando...
+              </>
+            ) : (
+              <>
+                Ingresar
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Información de soporte */}
+        <div className="mt-6 pt-6 border-t border-slate-200 text-center">
+          <p className="text-xs text-slate-500">
+            ¿Problemas para ingresar? Contacta al administrador
+          </p>
+        </div>
       </div>
     </div>
   )

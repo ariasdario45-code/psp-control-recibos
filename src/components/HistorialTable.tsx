@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Filter, Edit2, Trash2, FileText, Eye, X, Image as ImageIcon } from 'lucide-react'
+import { Download, Filter, Edit2, Trash2, FileText, Eye, X, Image as ImageIcon, Ship } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as ExcelJS from 'exceljs'
 import jsPDF from 'jspdf'
@@ -30,6 +30,7 @@ interface Detalle {
   motonave: string
   auxiliar: string
   creado_en: string
+  estado: string
 }
 
 interface Evidencia {
@@ -96,7 +97,7 @@ const convertirImagenABase64 = async (url: string): Promise<{ base64: string; fo
 
 export default function HistorialTable() {
   const navigate = useNavigate()
-  const [registros, setRegistros] = useState<Detalle[]>([])
+  const [planillas, setPlanillas] = useState<any[]>([])
   const [evidencias, setEvidencias] = useState<Map<number, Evidencia[]>>(new Map())
   const [cargando, setCargando] = useState(true)
   const [mostrarFiltros, setMostrarFiltros] = useState(true)
@@ -121,9 +122,12 @@ export default function HistorialTable() {
   const [imagenesPreview, setImagenesPreview] = useState<string[]>([])
 
   useEffect(() => {
-    cargarRegistros()
     cargarConfiguracion()
   }, [])
+
+  useEffect(() => {
+    cargarPlanillas()
+  }, [filtros])
 
   const cargarConfiguracion = async () => {
     try {
@@ -138,62 +142,50 @@ export default function HistorialTable() {
     }
   }
 
-  const cargarEvidencias = async (planillaIds: number[]) => {
-    try {
-      const { data, error } = await supabase
-        .from('evidencias')
-        .select('*')
-        .in('planilla_id', planillaIds)
-        .order('creado_en', { ascending: true })
-      if (error) { console.error('Error cargando evidencias:', error); return }
-      const mapaEvidencias = new Map<number, Evidencia[]>()
-      data?.forEach(evidencia => {
-        let urlCorrecta = evidencia.imagen_url
-        if (!urlCorrecta.startsWith('http')) {
-          const supabaseUrl = supabase.supabaseUrl || 'https://fdgslpppevqdufaohyoi.supabase.co'
-          urlCorrecta = `${supabaseUrl}${urlCorrecta.startsWith('/') ? '' : '/'}${urlCorrecta}`
-        }
-        console.log('🔗 URL de evidencia:', urlCorrecta)
-        const evidenciaCorregida = { ...evidencia, imagen_url: urlCorrecta }
-        if (!mapaEvidencias.has(evidencia.planilla_id)) {
-          mapaEvidencias.set(evidencia.planilla_id, [])
-        }
-        mapaEvidencias.get(evidencia.planilla_id)!.push(evidenciaCorregida)
-      })
-      setEvidencias(mapaEvidencias)
-    } catch (error) {
-      console.error('Error al cargar evidencias:', error)
-    }
-  }
-
-  const cargarRegistros = async () => {
+  const cargarPlanillas = async () => {
     setCargando(true)
     try {
-      const { data: planillas, error } = await supabase
+      let query = supabase
         .from('planillas')
-        .select(`id, fecha, tipo_carga, turno, motonave, auxiliar, creado_en,
-          planilla_detalles (id, equipo, proveedor, operador, cedula, fase, h_inicial, h_final, hora_inicio, hora_fin, n_recibo, observaciones, estibador, estib_hora_llegada, estib_hora_salida, estib_observaciones)`)
+        .select(`*, planilla_detalles(*)`)
         .order('creado_en', { ascending: false })
+
+      if (filtros.fecha) query = query.eq('fecha', filtros.fecha)
+      if (filtros.tipoCarga) query = query.eq('tipo_carga', filtros.tipoCarga)
+      if (filtros.turno) query = query.eq('turno', filtros.turno)
+      if (filtros.motonave) query = query.eq('motonave', filtros.motonave)
+      if (filtros.auxiliar) query = query.eq('auxiliar', filtros.auxiliar)
+
+      const { data, error } = await query
       if (error) { console.error('Error al cargar:', error); setCargando(false); return }
-      const registrosAplanados: Detalle[] = []
-      const planillaIds: number[] = []
-      planillas?.forEach(planilla => {
-        planillaIds.push(planilla.id)
-        planilla.planilla_detalles?.forEach((detalle: any) => {
-          registrosAplanados.push({
-            ...detalle,
-            planilla_id: planilla.id,
-            fecha: planilla.fecha,
-            tipo_carga: planilla.tipo_carga,
-            turno: planilla.turno,
-            motonave: planilla.motonave,
-            auxiliar: planilla.auxiliar,
-            creado_en: planilla.creado_en,
-          })
+
+      setPlanillas(data || [])
+
+      // Cargar evidencias de las planillas filtradas
+      if (data && data.length > 0) {
+        const planillaIds = data.map((p: any) => p.id)
+        const { data: evData } = await supabase
+          .from('evidencias')
+          .select('*')
+          .in('planilla_id', planillaIds)
+          .order('creado_en', { ascending: true })
+
+        const mapaEvidencias = new Map<number, Evidencia[]>()
+        evData?.forEach(evidencia => {
+          let urlCorrecta = evidencia.imagen_url
+          if (!urlCorrecta.startsWith('http')) {
+            const supabaseUrl = (supabase as any).supabaseUrl || 'https://fdgslpppevqdufaohyoi.supabase.co'
+            urlCorrecta = `${supabaseUrl}${urlCorrecta.startsWith('/') ? '' : '/'}${urlCorrecta}`
+          }
+          console.log('🔗 URL de evidencia:', urlCorrecta)
+          const evidenciaCorregida = { ...evidencia, imagen_url: urlCorrecta }
+          if (!mapaEvidencias.has(evidencia.planilla_id)) {
+            mapaEvidencias.set(evidencia.planilla_id, [])
+          }
+          mapaEvidencias.get(evidencia.planilla_id)!.push(evidenciaCorregida)
         })
-      })
-      setRegistros(registrosAplanados)
-      if (planillaIds.length > 0) await cargarEvidencias(planillaIds)
+        setEvidencias(mapaEvidencias)
+      }
     } catch (error) {
       console.error('Error:', error)
     }
@@ -205,64 +197,39 @@ export default function HistorialTable() {
     setImagenesPreview(evidenciasPlanilla.map(e => e.imagen_url))
   }
 
-  const registrosFiltrados = registros.filter(reg => {
-    if (filtros.fecha && reg.fecha !== filtros.fecha) return false
-    if (filtros.tipoCarga && reg.tipo_carga !== filtros.tipoCarga) return false
-    if (filtros.turno && reg.turno !== filtros.turno) return false
-    if (filtros.motonave && reg.motonave !== filtros.motonave) return false
-    if (filtros.auxiliar && reg.auxiliar !== filtros.auxiliar) return false
-    return true
-  })
+  // Derivamos los registros aplanados para que la lógica de PDF/Excel siga funcionando igual
+  const registrosFiltrados = useMemo(() => {
+    const regs: Detalle[] = []
+    planillas.forEach((p: any) => {
+      p.planilla_detalles?.forEach((d: any) => {
+        regs.push({
+          ...d,
+          planilla_id: p.id,
+          fecha: p.fecha,
+          tipo_carga: p.tipo_carga,
+          turno: p.turno,
+          motonave: p.motonave,
+          auxiliar: p.auxiliar,
+          creado_en: p.creado_en,
+          estado: p.estado
+        })
+      })
+    })
+    return regs
+  }, [planillas])
 
   const limpiarFiltros = () => setFiltros({ fecha: '', tipoCarga: '', turno: '', motonave: '', auxiliar: '' })
 
-  const eliminarRegistro = async (id: number) => {
-    if (!confirm('¿Estás seguro de eliminar este registro?')) return
+  const eliminarPlanilla = async (id: number, motonave: string) => {
+    if (!confirm(`¿Estás seguro de eliminar el turno de ${motonave} y todos sus registros?`)) return
     try {
-      await supabase.from('planilla_detalles').delete().eq('id', id)
-      const registro = registros.find(r => r.id === id)
-      if (registro) {
-        const { data: detallesRestantes } = await supabase.from('planilla_detalles').select('id').eq('planilla_id', registro.planilla_id)
-        if (detallesRestantes && detallesRestantes.length === 0) {
-          await supabase.from('planillas').delete().eq('id', registro.planilla_id)
-        }
-      }
-      await cargarRegistros()
-      alert('✅ Registro eliminado correctamente')
+      await supabase.from('planilla_detalles').delete().eq('planilla_id', id)
+      await supabase.from('planillas').delete().eq('id', id)
+      cargarPlanillas()
+      alert('✅ Turno eliminado correctamente')
     } catch (error: any) {
       alert('❌ Error al eliminar: ' + error.message)
     }
-  }
-
-  const editarRegistro = (reg: Detalle) => {
-    localStorage.setItem('planilla_editar', JSON.stringify({
-      planilla_id: reg.planilla_id,
-      fecha: reg.fecha,
-      tipoCarga: reg.tipo_carga,
-      turno: reg.turno,
-      motonave: reg.motonave,
-      auxiliar: reg.auxiliar,
-      registros: [{
-        id: 1,
-        id_detalle: reg.id,
-        equipo: reg.equipo,
-        proveedor: reg.proveedor,
-        operador: reg.operador,
-        cedula: reg.cedula,
-        fase: reg.fase,
-        hInicial: reg.h_inicial,
-        hFinal: reg.h_final,
-        horaInicio: reg.hora_inicio,
-        horaFin: reg.hora_fin,
-        nRecibo: reg.n_recibo,
-        observaciones: reg.observaciones,
-        estibador: reg.estibador,
-        estib_hora_llegada: reg.estib_hora_llegada,
-        estib_hora_salida: reg.estib_hora_salida,
-        estib_observaciones: reg.estib_observaciones,
-      }],
-    }))
-    navigate('/nuevo')
   }
 
   // ✅ FUNCIÓN EXPORTAR PDF COMPLETA Y CORREGIDA
@@ -607,8 +574,8 @@ export default function HistorialTable() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Historial de Planillas</h2>
-            <p className="text-slate-600">{cargando ? 'Cargando...' : `Mostrando ${registrosFiltrados.length} de ${registros.length} registros`}</p>
+            <h2 className="text-2xl font-bold text-slate-900">Historial de Turnos</h2>
+            <p className="text-slate-600">{cargando ? 'Cargando...' : `Mostrando ${planillas.length} turnos`}</p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
@@ -652,14 +619,14 @@ export default function HistorialTable() {
                 <label className="block text-xs font-medium text-slate-700 mb-1">Motonave</label>
                 <select value={filtros.motonave} onChange={(e) => setFiltros(prev => ({ ...prev, motonave: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
                   <option value="">Todas</option>
-                  {[...new Set(registros.map(r => r.motonave))].map(m => <option key={m} value={m}>{m}</option>)}
+                  {[...new Set(planillas.map(r => r.motonave))].map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Auxiliar</label>
                 <select value={filtros.auxiliar} onChange={(e) => setFiltros(prev => ({ ...prev, auxiliar: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
                   <option value="">Todos</option>
-                  {[...new Set(registros.map(r => r.auxiliar))].map(a => <option key={a} value={a}>{a}</option>)}
+                  {[...new Set(planillas.map(r => r.auxiliar))].map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
             </div>
@@ -667,86 +634,52 @@ export default function HistorialTable() {
         )}
       </div>
 
+      {/* TABLA DE TURNOS AGRUPADOS */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-800 text-white">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">N°</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Equipo</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Proveedor</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Tipo</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Nombre</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Cédula</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Fase</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Inicial</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">H.Final</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Hora Inicial</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Hora Final</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">N° Recibo</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Observaciones</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Fecha</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Motonave</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Tipo Carga</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Turno</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Auxiliar</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase">Registros</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Estado</th>
                 <th className="px-3 py-3 text-center text-xs font-semibold uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {cargando ? (
-                <tr><td colSpan={14} className="px-4 py-8 text-center text-slate-500">Cargando registros...</td></tr>
-              ) : registrosFiltrados.length === 0 ? (
-                <tr><td colSpan={14} className="px-4 py-8 text-center text-slate-500">No hay registros. Ve a "Nuevo registro" para agregar datos.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">Cargando turnos...</td></tr>
+              ) : planillas.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">No hay turnos registrados. Ve a "Nuevo registro" para crear uno.</td></tr>
               ) : (
-                registrosFiltrados.map((reg, idx) => (
-                  <React.Fragment key={reg.id}>
-                    {reg.operador && (
-                      <tr className="hover:bg-slate-50">
-                        <td className="px-3 py-3 text-sm font-medium">{idx + 1}</td>
-                        <td className="px-3 py-3 text-sm">{reg.equipo || '-'}</td>
-                        <td className="px-3 py-3 text-sm">{reg.proveedor || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-bold text-blue-700">OPERADOR</td>
-                        <td className="px-3 py-3 text-sm font-semibold">{reg.operador}</td>
-                        <td className="px-3 py-3 text-sm">{reg.cedula || '-'}</td>
-                        <td className="px-3 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${reg.fase === '1RA FASE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{reg.fase || '-'}</span></td>
-                        <td className="px-3 py-3 text-sm font-mono">{reg.h_inicial || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-mono">{reg.h_final || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-mono">{reg.hora_inicio || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-mono">{reg.hora_fin || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-mono">{reg.n_recibo || '-'}</td>
-                        <td className="px-3 py-3 text-sm">{reg.observaciones || '-'}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex justify-center gap-2">
-                            <button onClick={() => { setMostrandoPreview(reg); cargarImagenesParaPreview(reg.planilla_id) }} className="text-blue-600 hover:text-blue-800 p-1" title="Ver detalles"><Eye className="w-4 h-4" /></button>
-                            <button onClick={() => editarRegistro(reg)} className="text-slate-600 hover:text-slate-800 p-1" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                            <button onClick={() => eliminarRegistro(reg.id)} className="text-red-600 hover:text-red-800 p-1" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    {reg.estibador && (
-                      <tr className="bg-green-50 hover:bg-green-100">
-                        <td className="px-3 py-3 text-sm text-slate-500">{reg.operador ? '↳' : (idx + 1)}</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">-</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">{reg.proveedor || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-bold text-green-700">ESTIBADOR</td>
-                        <td className="px-3 py-3 text-sm font-semibold text-green-900">{reg.estibador}</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">-</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">-</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">-</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">-</td>
-                        <td className="px-3 py-3 text-sm font-mono text-green-800">{reg.estib_hora_llegada || '-'}</td>
-                        <td className="px-3 py-3 text-sm font-mono text-green-800">{reg.estib_hora_salida || '-'}</td>
-                        <td className="px-3 py-3 text-sm text-slate-600">-</td>
-                        <td className="px-3 py-3 text-sm text-green-800">{reg.estib_observaciones || '-'}</td>
-                        <td className="px-3 py-3">
-                          {!reg.operador && (
-                            <div className="flex justify-center gap-2">
-                              <button onClick={() => { setMostrandoPreview(reg); cargarImagenesParaPreview(reg.planilla_id) }} className="text-blue-600 hover:text-blue-800 p-1" title="Ver detalles"><Eye className="w-4 h-4" /></button>
-                              <button onClick={() => editarRegistro(reg)} className="text-slate-600 hover:text-slate-800 p-1" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                              <button onClick={() => eliminarRegistro(reg.id)} className="text-red-600 hover:text-red-800 p-1" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                planillas.map((planilla, idx) => (
+                  <tr key={planilla.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 text-sm">{planilla.fecha}</td>
+                    <td className="px-3 py-3 text-sm font-semibold flex items-center gap-2"><Ship className="w-4 h-4 text-[#0077B6]" /> {planilla.motonave}</td>
+                    <td className="px-3 py-3 text-sm"><span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">{planilla.tipo_carga}</span></td>
+                    <td className="px-3 py-3 text-sm"><span className={`px-2 py-1 rounded text-xs font-medium ${planilla.turno === 'DIA' ? 'bg-yellow-100 text-yellow-800' : 'bg-indigo-100 text-indigo-800'}`}>{planilla.turno === 'DIA' ? '☀️' : '🌙'} {planilla.turno}</span></td>
+                    <td className="px-3 py-3 text-sm">{planilla.auxiliar}</td>
+                    <td className="px-3 py-3 text-sm text-center font-bold">{planilla.planilla_detalles?.length || 0}</td>
+                    <td className="px-3 py-3 text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${planilla.estado === 'EN_CURSO' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
+                        {planilla.estado === 'EN_CURSO' ? '🟢 En curso' : '🔒 Cerrado'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => navigate(`/turno/${planilla.id}`)} className="text-blue-600 hover:text-blue-800 p-1" title="Ver/Editar Turno Completo">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => eliminarPlanilla(planilla.id, planilla.motonave)} className="text-red-600 hover:text-red-800 p-1" title="Eliminar Turno">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>
