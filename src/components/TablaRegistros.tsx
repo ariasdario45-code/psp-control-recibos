@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
-  Plus, Trash2, ArrowLeft, Lock, Clock, FileText, Loader2, XCircle, Image as ImageIcon, Save
+  Plus, Trash2, ArrowLeft, Lock, Clock, FileText, Loader2, XCircle, Image as ImageIcon, Save, Wand2
 } from 'lucide-react'
 
 interface Registro {
@@ -39,6 +39,18 @@ interface Planilla {
   observaciones_cierre: string
 }
 
+// Generar horas de 15 en 15 minutos (00:00 a 23:45)
+const generarHoras = () => {
+  const horas = []
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      horas.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+    }
+  }
+  return horas
+}
+const opcionesHora = generarHoras()
+
 export default function TablaRegistros() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -49,8 +61,8 @@ export default function TablaRegistros() {
   const [cargando, setCargando] = useState(true)
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' })
   const [archivosNuevos, setArchivosNuevos] = useState<File[]>([])
+  const [autoHorasAsignadas, setAutoHorasAsignadas] = useState(false) // ✅ NUEVO: Para evitar duplicados
 
-  // Datos para autocompletado (se mantienen como referencia pero no limitan la escritura)
   const [equipos, setEquipos] = useState<any[]>([])
   const [operadores, setOperadores] = useState<any[]>([])
   const [fases, setFases] = useState<any[]>([])
@@ -73,13 +85,48 @@ export default function TablaRegistros() {
     }
   }, [id])
 
-  const cargarPlanilla = async () => {
-    const { data, error } = await supabase
-      .from('planillas')
-      .select('*')
-      .eq('id', id)
-      .single()
+  // ✨ NUEVO: Auto-asignar horas de salida cuando sea la hora
+  useEffect(() => {
+    if (!planilla || autoHorasAsignadas || planilla.estado !== 'EN_CURSO') return
 
+    const verificarYAsignarHoras = () => {
+      const ahora = new Date()
+      const horaActual = ahora.getHours()
+      const minutosActuales = ahora.getMinutes()
+      const horaActualMinutos = horaActual * 60 + minutosActuales
+
+      // Determinar si es hora de asignar horas de salida
+      let horaSugerida = ''
+      let minutosLimite = 0
+
+      if (planilla.turno === 'DIA') {
+        // Turno día: asignar a las 19:15 (19*60 + 15 = 1155 minutos)
+        minutosLimite = 19 * 60 + 15
+        horaSugerida = '19:30'
+      } else {
+        // Turno noche: asignar a las 07:15 (7*60 + 15 = 435 minutos)
+        minutosLimite = 7 * 60 + 15
+        horaSugerida = '07:30'
+      }
+
+      // Si ya pasó la hora límite y aún no se han asignado las horas
+      if (horaActualMinutos >= minutosLimite) {
+        autoAsignarHorasSalida(horaSugerida)
+        setAutoHorasAsignadas(true) // Marcar como ya asignadas
+      }
+    }
+
+    // Verificar cada minuto (60000 ms)
+    const intervalo = setInterval(verificarYAsignarHoras, 60000)
+    
+    // Verificar inmediatamente al cargar
+    verificarYAsignarHoras()
+
+    return () => clearInterval(intervalo)
+  }, [planilla, autoHorasAsignadas])
+
+  const cargarPlanilla = async () => {
+    const { data, error } = await supabase.from('planillas').select('*').eq('id', id).single()
     if (error) {
       setMensaje({ tipo: 'error', texto: 'Error al cargar la planilla' })
       return
@@ -131,7 +178,6 @@ export default function TablaRegistros() {
       supabase.from('operadores').select('*').order('nombre', { ascending: true }),
       supabase.from('fases').select('*').order('nombre', { ascending: true })
     ])
-
     if (eqRes.data) setEquipos(eqRes.data)
     if (opRes.data) setOperadores(opRes.data)
     if (faRes.data) setFases(faRes.data)
@@ -142,7 +188,6 @@ export default function TablaRegistros() {
     if (data) setEvidencias(data)
   }
 
-  // Guardar registro en Supabase
   const guardarRegistro = useCallback(async (registro: Registro) => {
     const { error } = await supabase
       .from('planilla_detalles')
@@ -173,19 +218,51 @@ export default function TablaRegistros() {
     }
   }, [])
 
-  // Actualizar celda y guardar automáticamente
   const actualizarCelda = (index: number, campo: keyof Registro, valor: any) => {
     const nuevosRegistros = [...registros]
     nuevosRegistros[index] = { ...nuevosRegistros[index], [campo]: valor }
     setRegistros(nuevosRegistros)
 
-    // Autoguardado después de 1 segundo
     setTimeout(() => {
       guardarRegistro(nuevosRegistros[index])
     }, 1000)
   }
 
-  // Agregar nueva fila
+  // ✨ FUNCIÓN PARA AUTO-ASIGNAR HORAS (usada por el useEffect y el botón)
+  const autoAsignarHorasSalida = (horaSugerida: string) => {
+    let cambiosRealizados = 0
+
+    const nuevosRegistros = registros.map(reg => {
+      if (!reg.hora_fin && (reg.hora_inicio || reg.equipo)) {
+        cambiosRealizados++
+        return { ...reg, hora_fin: horaSugerida }
+      }
+      return reg
+    })
+
+    if (cambiosRealizados === 0) {
+      return
+    }
+
+    setRegistros(nuevosRegistros)
+    
+    // Guardar los cambios en Supabase
+    nuevosRegistros.forEach(reg => {
+      guardarRegistro(reg)
+    })
+
+    setMensaje({ tipo: 'exito', texto: `⏰ Se asignó automáticamente ${horaSugerida} a ${cambiosRealizados} registro(s).` })
+  }
+
+  // ✨ FUNCIÓN MANUAL (por si el auxiliar quiere hacerlo antes)
+  const autoCompletarHorasSalida = () => {
+    if (!planilla) return
+    
+    const horaSugerida = planilla.turno === 'DIA' ? '19:30' : '07:30'
+    autoAsignarHorasSalida(horaSugerida)
+    setAutoHorasAsignadas(true)
+  }
+
   const agregarFila = async () => {
     const { data, error } = await supabase
       .from('planilla_detalles')
@@ -237,17 +314,11 @@ export default function TablaRegistros() {
     setRegistros([...registros, nuevoRegistro])
   }
 
-  // Eliminar fila
   const eliminarFila = async (index: number) => {
     const registro = registros[index]
-
     if (!confirm('¿Estás seguro de eliminar este registro?')) return
 
-    const { error } = await supabase
-      .from('planilla_detalles')
-      .delete()
-      .eq('id', registro.id)
-
+    const { error } = await supabase.from('planilla_detalles').delete().eq('id', registro.id)
     if (error) {
       setMensaje({ tipo: 'error', texto: 'Error al eliminar' })
       return
@@ -258,7 +329,6 @@ export default function TablaRegistros() {
     setMensaje({ tipo: 'exito', texto: 'Registro eliminado' })
   }
 
-  // Subir fotos adicionales
   const subirFotosAdicionales = async () => {
     if (archivosNuevos.length === 0) return
     setMensaje({ tipo: 'exito', texto: 'Subiendo fotos...' })
@@ -276,7 +346,6 @@ export default function TablaRegistros() {
     setMensaje({ tipo: 'exito', texto: '✅ Fotos subidas correctamente' })
   }
 
-  // Cerrar turno
   const cerrarTurno = async () => {
     if (!confirm('¿Cerrar el turno? Podrás seguir editando si es necesario.')) return
 
@@ -294,9 +363,7 @@ export default function TablaRegistros() {
     }
 
     setMensaje({ tipo: 'exito', texto: '✅ Turno cerrado exitosamente. Puedes seguir editando si lo necesitas.' })
-    setTimeout(() => {
-      cargarPlanilla()
-    }, 1500)
+    setTimeout(() => { cargarPlanilla() }, 1500)
   }
 
   if (cargando) {
@@ -316,10 +383,7 @@ export default function TablaRegistros() {
         <div className="text-center">
           <XCircle className="w-12 h-12 text-red-500 mx-auto" />
           <p className="mt-4 text-slate-600">No se encontró el turno</p>
-          <button
-            onClick={() => navigate('/panel')}
-            className="mt-4 text-[#0077B6] hover:underline"
-          >
+          <button onClick={() => navigate('/panel')} className="mt-4 text-[#0077B6] hover:underline">
             Volver al panel
           </button>
         </div>
@@ -334,36 +398,24 @@ export default function TablaRegistros() {
         <div className="max-w-full mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate('/historial')}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+              <button onClick={() => navigate('/historial')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-xl font-bold text-slate-900">
-                  Turno: {planilla.motonave}
-                </h1>
-                <p className="text-sm text-slate-500">
-                  {planilla.tipo_carga} • {planilla.turno} • {planilla.auxiliar}
-                </p>
+                <h1 className="text-xl font-bold text-slate-900">Turno: {planilla.motonave}</h1>
+                <p className="text-sm text-slate-500">{planilla.tipo_carga} • {planilla.turno} • {planilla.auxiliar}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                planilla.estado === 'EN_CURSO'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-slate-100 text-slate-800'
+                planilla.estado === 'EN_CURSO' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'
               }`}>
                 {planilla.estado === 'EN_CURSO' ? '🟢 En curso' : '🔒 Cerrado (Editable)'}
               </span>
 
               {planilla.estado === 'EN_CURSO' && (
-                <button
-                  onClick={cerrarTurno}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-                >
+                <button onClick={cerrarTurno} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
                   <Lock className="w-4 h-4" />
                   Cerrar Turno
                 </button>
@@ -371,24 +423,11 @@ export default function TablaRegistros() {
             </div>
           </div>
 
-          {/* Info del turno */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-slate-200">
-            <div>
-              <p className="text-xs text-slate-500">Fecha</p>
-              <p className="text-sm font-medium">{planilla.fecha}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Hora Inicio</p>
-              <p className="text-sm font-medium">{planilla.hora_inicio}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Registros</p>
-              <p className="text-sm font-medium">{registros.length}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Auxiliar</p>
-              <p className="text-sm font-medium">{planilla.auxiliar}</p>
-            </div>
+            <div><p className="text-xs text-slate-500">Fecha</p><p className="text-sm font-medium">{planilla.fecha}</p></div>
+            <div><p className="text-xs text-slate-500">Hora Inicio</p><p className="text-sm font-medium">{planilla.hora_inicio}</p></div>
+            <div><p className="text-xs text-slate-500">Registros</p><p className="text-sm font-medium">{registros.length}</p></div>
+            <div><p className="text-xs text-slate-500">Auxiliar</p><p className="text-sm font-medium">{planilla.auxiliar}</p></div>
           </div>
         </div>
       </div>
@@ -406,56 +445,43 @@ export default function TablaRegistros() {
       <div className="max-w-full mx-auto p-6">
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           {/* Toolbar */}
-          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between bg-slate-50 gap-3">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#0077B6]" />
               <h2 className="font-medium text-slate-900">Registros del Turno</h2>
               <span className="text-xs text-slate-500">({registros.length} registros)</span>
             </div>
 
-            <div className="flex gap-2">
-              {/* Botón Agregar Fotos */}
-           {/* Botón Tomar Foto */}
-<label className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
-  <ImageIcon className="w-4 h-4" />
-  Tomar Foto
-  <input 
-    type="file" 
-    accept="image/*"
-    capture="environment"
-    multiple 
-    className="hidden" 
-    onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))} 
-  />
-</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={autoCompletarHorasSalida}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                title="Asigna 19:30 o 07:30 manualmente a los registros pendientes"
+              >
+                <Wand2 className="w-4 h-4" />
+                Auto Horas Salida
+              </button>
 
-{/* Botón Subir de Galería */}
-<label className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
-  <ImageIcon className="w-4 h-4" />
-  Galería
-  <input 
-    type="file" 
-    accept="image/*"
-    multiple 
-    className="hidden" 
-    onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))} 
-  />
-</label>
-              </div>
+              <label className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
+                <ImageIcon className="w-4 h-4" />
+                Tomar Foto
+                <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))} />
+              </label>
+
+              <label className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
+                <ImageIcon className="w-4 h-4" />
+                Galería
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => setArchivosNuevos(Array.from(e.target.files || []))} />
+              </label>
+
               {archivosNuevos.length > 0 && (
-                <button
-                  onClick={subirFotosAdicionales}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-                >
+                <button onClick={subirFotosAdicionales} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
                   <Save className="w-4 h-4" />
                   Subir ({archivosNuevos.length})
                 </button>
               )}
 
-              <button
-                onClick={agregarFila}
-                className="px-4 py-2 bg-[#0077B6] hover:bg-[#005f8f] text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-              >
+              <button onClick={agregarFila} className="px-4 py-2 bg-[#0077B6] hover:bg-[#005f8f] text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
                 <Plus className="w-4 h-4" />
                 Agregar Registro
               </button>
@@ -473,8 +499,8 @@ export default function TablaRegistros() {
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Operador</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Cédula</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Fase</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">H.Inicial</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">H.Final</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">H.Ini</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">H.Fin</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Hora Ini</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Hora Fin</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase">N° Recibo</th>
@@ -485,161 +511,72 @@ export default function TablaRegistros() {
               <tbody className="divide-y divide-slate-200">
                 {registros.map((registro, index) => (
                   <tr key={registro.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-3 py-2 text-sm font-medium text-slate-900">
-                      {index + 1}
+                    <td className="px-3 py-2 text-sm font-medium text-slate-900">{index + 1}</td>
+
+                    <td className="px-3 py-2">
+                      <input type="text" value={registro.equipo} onChange={(e) => actualizarCelda(index, 'equipo', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" placeholder="Ej: ELEVADOR 01611" list={`lista-equipos-${index}`} />
+                      <datalist id={`lista-equipos-${index}`}>{equipos.map((eq) => (<option key={eq.id} value={eq.nombre} />))}</datalist>
                     </td>
 
-                    {/* Equipo - INPUT DE TEXTO LIBRE con autocompletado */}
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.equipo}
-                        onChange={(e) => actualizarCelda(index, 'equipo', e.target.value)}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                        placeholder="Ej: ELEVADOR 01611"
-                        list={`lista-equipos-${index}`}
-                      />
-                      <datalist id={`lista-equipos-${index}`}>
-                        {equipos.map((eq) => (
-                          <option key={eq.id} value={eq.nombre} />
-                        ))}
-                      </datalist>
+                      <input type="text" value={registro.proveedor} onChange={(e) => actualizarCelda(index, 'proveedor', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" placeholder="Ej: PALERMO" list={`lista-proveedores-${index}`} />
+                      <datalist id={`lista-proveedores-${index}`}>{proveedores.map((prov, i) => (<option key={i} value={prov} />))}</datalist>
                     </td>
 
-                    {/* Proveedor - INPUT DE TEXTO LIBRE con autocompletado */}
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.proveedor}
-                        onChange={(e) => actualizarCelda(index, 'proveedor', e.target.value)}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                        placeholder="Ej: PALERMO"
-                        list={`lista-proveedores-${index}`}
-                      />
-                      <datalist id={`lista-proveedores-${index}`}>
-                        {proveedores.map((prov, i) => (
-                          <option key={i} value={prov} />
-                        ))}
-                      </datalist>
+                      <input type="text" value={registro.operador} onChange={(e) => actualizarCelda(index, 'operador', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" placeholder="Nombre del operador" list={`lista-operadores-${index}`} />
+                      <datalist id={`lista-operadores-${index}`}>{operadores.map((op) => (<option key={op.id} value={op.nombre} />))}</datalist>
                     </td>
 
-                    {/* Operador - INPUT DE TEXTO LIBRE con autocompletado */}
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.operador}
-                        onChange={(e) => actualizarCelda(index, 'operador', e.target.value)}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                        placeholder="Nombre del operador"
-                        list={`lista-operadores-${index}`}
-                      />
-                      <datalist id={`lista-operadores-${index}`}>
-                        {operadores.map((op) => (
-                          <option key={op.id} value={op.nombre} />
-                        ))}
-                      </datalist>
+                      <input type="text" value={registro.cedula} onChange={(e) => actualizarCelda(index, 'cedula', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" placeholder="N/A" />
                     </td>
 
-                    {/* Cédula */}
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.cedula}
-                        onChange={(e) => actualizarCelda(index, 'cedula', e.target.value)}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                        placeholder="N/A"
-                      />
+                      <input type="text" value={registro.fase} onChange={(e) => actualizarCelda(index, 'fase', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" placeholder="1RA FASE" list={`lista-fases-${index}`} />
+                      <datalist id={`lista-fases-${index}`}>{fases.map((f) => (<option key={f.id} value={f.nombre} />))}</datalist>
                     </td>
 
-                    {/* Fase - INPUT DE TEXTO LIBRE con autocompletado */}
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.fase}
-                        onChange={(e) => actualizarCelda(index, 'fase', e.target.value)}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                        placeholder="1RA FASE"
-                        list={`lista-fases-${index}`}
-                      />
-                      <datalist id={`lista-fases-${index}`}>
-                        {fases.map((f) => (
-                          <option key={f.id} value={f.nombre} />
-                        ))}
-                      </datalist>
+                      <input type="number" step="0.1" value={registro.h_inicial ?? ''} onChange={(e) => actualizarCelda(index, 'h_inicial', e.target.value === '' ? null : parseFloat(e.target.value))} className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" />
                     </td>
 
-                    {/* H.Inicial (Horómetro) */}
                     <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={registro.h_inicial ?? ''}
-                        onChange={(e) => actualizarCelda(index, 'h_inicial', e.target.value === '' ? null : parseFloat(e.target.value))}
-                        className="w-24 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                      />
+                      <input type="number" step="0.1" value={registro.h_final ?? ''} onChange={(e) => actualizarCelda(index, 'h_final', e.target.value === '' ? null : parseFloat(e.target.value))} className={`w-20 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none ${!registro.h_final && registro.h_inicial ? 'border-red-400 bg-red-50' : 'border-slate-300'}`} />
                     </td>
 
-                    {/* H.Final (Horómetro) */}
                     <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={registro.h_final ?? ''}
-                        onChange={(e) => actualizarCelda(index, 'h_final', e.target.value === '' ? null : parseFloat(e.target.value))}
-                        className={`w-24 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none ${
-                          !registro.h_final && registro.h_inicial ? 'border-red-400 bg-red-50' : 'border-slate-300'
-                        }`}
-                      />
-                    </td>
-
-                    {/* Hora Inicio */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="time"
+                      <select
                         value={registro.hora_inicio}
                         onChange={(e) => actualizarCelda(index, 'hora_inicio', e.target.value)}
-                        className="w-24 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                      />
+                        className="w-24 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white"
+                      >
+                        <option value="">--:--</option>
+                        {opcionesHora.map(h => (<option key={h} value={h}>{h}</option>))}
+                      </select>
                     </td>
 
-                    {/* Hora Final */}
                     <td className="px-3 py-2">
-                      <input
-                        type="time"
+                      <select
                         value={registro.hora_fin}
                         onChange={(e) => actualizarCelda(index, 'hora_fin', e.target.value)}
-                        className="w-24 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                      />
-                    </td>
-
-                    {/* N° Recibo */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.n_recibo}
-                        onChange={(e) => actualizarCelda(index, 'n_recibo', e.target.value)}
-                        className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                      />
-                    </td>
-
-                    {/* Observaciones */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={registro.observaciones}
-                        onChange={(e) => actualizarCelda(index, 'observaciones', e.target.value)}
-                        className="w-32 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none"
-                        placeholder="1H ALIMENTO"
-                      />
-                    </td>
-
-                    {/* Acciones */}
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => eliminarFila(index)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Eliminar registro"
+                        className={`w-24 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white ${!registro.hora_fin && registro.hora_inicio ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
                       >
+                        <option value="">--:--</option>
+                        {opcionesHora.map(h => (<option key={h} value={h}>{h}</option>))}
+                      </select>
+                    </td>
+
+                    <td className="px-3 py-2">
+                      <input type="text" value={registro.n_recibo} onChange={(e) => actualizarCelda(index, 'n_recibo', e.target.value)} className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" />
+                    </td>
+
+                    <td className="px-3 py-2">
+                      <input type="text" value={registro.observaciones} onChange={(e) => actualizarCelda(index, 'observaciones', e.target.value)} className="w-32 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none" placeholder="1H ALIMENTO" />
+                    </td>
+
+                    <td className="px-3 py-2">
+                      <button onClick={() => eliminarFila(index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar registro">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
@@ -649,14 +586,11 @@ export default function TablaRegistros() {
             </table>
           </div>
 
-          {/* Footer de la tabla */}
           {registros.length === 0 && (
             <div className="p-8 text-center">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500">No hay registros aún</p>
-              <p className="text-sm text-slate-400 mt-1">
-                Haz clic en "Agregar Registro" para comenzar
-              </p>
+              <p className="text-sm text-slate-400 mt-1">Haz clic en "Agregar Registro" para comenzar</p>
             </div>
           )}
         </div>
@@ -670,13 +604,7 @@ export default function TablaRegistros() {
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {evidencias.map((ev) => (
-                <a
-                  key={ev.id}
-                  href={ev.imagen_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block aspect-square bg-slate-100 rounded-lg overflow-hidden border border-slate-200 hover:border-[#0077B6] transition-colors"
-                >
+                <a key={ev.id} href={ev.imagen_url} target="_blank" rel="noopener noreferrer" className="block aspect-square bg-slate-100 rounded-lg overflow-hidden border border-slate-200 hover:border-[#0077B6] transition-colors">
                   <img src={ev.imagen_url} alt="Recibo" className="w-full h-full object-cover" />
                 </a>
               ))}
@@ -693,12 +621,12 @@ export default function TablaRegistros() {
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• Los cambios se guardan automáticamente al modificar una celda</li>
             <li>• Puedes escribir libremente en Equipo, Proveedor, Operador y Fase</li>
-            <li>• Al escribir, se sugieren valores de la base de datos (autocompletado)</li>
-            <li>• Los campos en rojo indican datos faltantes</li>
-            <li>• Cierra el turno cuando finalice la operación (19:30 o 07:30)</li>
+            <li>• <strong>Automático:</strong> A las 19:15 (turno día) o 07:15 (turno noche), el sistema asignará 19:30 o 07:30 automáticamente</li>
+            <li>• Las horas se pueden seleccionar fácilmente del menú o editar manualmente si hubo inconvenientes</li>
             <li>• Puedes seguir editando aunque el turno esté cerrado</li>
           </ul>
         </div>
       </div>
+    </div>
   )
 }

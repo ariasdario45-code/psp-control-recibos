@@ -23,7 +23,7 @@ export default function NuevoTurno() {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [horaInicio, setHoraInicio] = useState('')
   
-  // Archivos de evidencia (NUEVO)
+  // Archivos de evidencia
   const [archivos, setArchivos] = useState<File[]>([])
   
   // Datos para autocompletado
@@ -76,8 +76,8 @@ export default function NuevoTurno() {
 
   const handleCrearTurno = async () => {
     // Validaciones
-    if (!motonave) {
-      setError('Debes seleccionar una motonave')
+    if (!motonave.trim()) {
+      setError('Debes ingresar o seleccionar una motonave')
       return
     }
     if (!tipoCarga) {
@@ -101,11 +101,31 @@ export default function NuevoTurno() {
     setCargando(true)
 
     try {
-      // 1. Insertar la planilla (turno)
+      // 1. VERIFICAR O CREAR LA MOTONAVE AUTOMÁTICAMENTE
+      const motonaveLimpia = motonave.trim()
+      const { data: naveExistente } = await supabase
+        .from('naves')
+        .select('id')
+        .eq('nombre', motonaveLimpia)
+        .single()
+
+      if (!naveExistente) {
+        // Si no existe, la registramos automáticamente en la base de datos
+        const { error: errorNave } = await supabase
+          .from('naves')
+          .insert({ nombre: motonaveLimpia })
+        
+        if (errorNave) {
+          console.error('⚠️ Error al crear nueva motonave:', errorNave)
+          // Continuamos sin bloquear al usuario, pero queda registrado en consola
+        }
+      }
+
+      // 2. Insertar la planilla (turno)
       const { data: planillaData, error: planillaError } = await supabase
         .from('planillas')
         .insert({
-          motonave: motonave,
+          motonave: motonaveLimpia,
           tipo_carga: tipoCarga,
           turno: turno,
           auxiliar: auxiliar,
@@ -118,7 +138,7 @@ export default function NuevoTurno() {
 
       if (planillaError) throw planillaError
 
-      // 2. Subir evidencias fotográficas si hay archivos
+      // 3. Subir evidencias fotográficas si hay archivos
       if (archivos.length > 0) {
         for (const file of archivos) {
           const fileName = `${Date.now()}_${file.name}`
@@ -185,26 +205,27 @@ export default function NuevoTurno() {
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Motonave */}
+            {/* Motonave - CAMBIADO A INPUT CON DATALIST */}
             <div className="md:col-span-2">
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
                 <Ship className="w-4 h-4" />
                 Motonave *
               </label>
-              <select
+              <input
+                type="text"
                 value={motonave}
                 onChange={(e) => setMotonave(e.target.value)}
+                list="lista-naves"
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0077B6] focus:border-transparent outline-none transition-all"
-              >
-                <option value="">Seleccionar motonave...</option>
+                placeholder="Escribe o selecciona una motonave..."
+              />
+              <datalist id="lista-naves">
                 {naves.map((nave) => (
-                  <option key={nave.id} value={nave.nombre}>
-                    {nave.nombre}
-                  </option>
+                  <option key={nave.id} value={nave.nombre} />
                 ))}
-              </select>
+              </datalist>
               <p className="text-xs text-slate-500 mt-1">
-                ¿No aparece? Agrégala en Administración → Naves
+                💡 Escribe el nombre. Si no existe en la base de datos, se registrará automáticamente.
               </p>
             </div>
 
@@ -311,7 +332,7 @@ export default function NuevoTurno() {
               </select>
             </div>
 
-            {/* Fotos de Recibos (NUEVO) */}
+            {/* Fotos de Recibos */}
             <div className="md:col-span-2">
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
                 <ImageIcon className="w-4 h-4" />
