@@ -7,11 +7,18 @@ import {
 } from 'lucide-react'
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-  LineChart, Line, AreaChart, Area
+  PieChart, Pie, Cell, Legend
 } from 'recharts'
 
 const COLORES = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+
+// Estilo personalizado para el Tooltip de los gráficos en modo oscuro
+const tooltipStyle = {
+  backgroundColor: 'rgba(30, 41, 59, 0.95)', // slate-800 con opacidad
+  border: '1px solid rgba(71, 85, 105, 0.5)', // slate-600
+  borderRadius: '0.5rem',
+  color: '#f8fafc' // slate-50 (blanco)
+}
 
 export default function Dashboard() {
   const { usuario } = useAuth()
@@ -35,7 +42,6 @@ export default function Dashboard() {
     setCargando(true)
 
     try {
-      // Estadísticas básicas
       const { count: countPlanillas } = await supabase
         .from('planillas')
         .select('*', { count: 'exact', head: true })
@@ -48,13 +54,12 @@ export default function Dashboard() {
 
       const { data: planillas } = await supabase
         .from('planillas')
-        .select('motonave, tipo_carga, turno')
+        .select('motonave, tipo_carga, turno, creado_en, auxiliar')
 
       const { data: detalles } = await supabase
         .from('planilla_detalles')
         .select('equipo, h_inicial, h_final')
 
-      // Calcular horas trabajadas
       let totalHoras = 0
       if (detalles) {
         detalles.forEach(d => {
@@ -64,7 +69,6 @@ export default function Dashboard() {
         })
       }
 
-      // Buques únicos atendidos
       const buquesUnicos = new Set(planillas?.map(p => p.motonave) || [])
 
       setStats({
@@ -74,7 +78,6 @@ export default function Dashboard() {
         horasTrabajadas: Math.round(totalHoras * 10) / 10,
       })
 
-      // Datos para gráfico de equipos
       const equiposMap: Record<string, number> = {}
       detalles?.forEach(d => {
         if (d.equipo) {
@@ -88,7 +91,6 @@ export default function Dashboard() {
         .slice(0, 8)
       setDatosEquipos(datosEquipos)
 
-      // Datos para gráfico de tipos de carga
       const tiposMap: Record<string, number> = {}
       planillas?.forEach(p => {
         if (p.tipo_carga) {
@@ -98,7 +100,6 @@ export default function Dashboard() {
       const datosTipos = Object.entries(tiposMap).map(([name, value]) => ({ name, value }))
       setDatosTiposCarga(datosTipos)
 
-      // Datos para gráfico de turnos
       const turnosMap: Record<string, number> = { DIA: 0, NOCHE: 0 }
       planillas?.forEach(p => {
         if (p.turno) {
@@ -110,7 +111,6 @@ export default function Dashboard() {
         { name: 'Noche', value: turnosMap.NOCHE },
       ])
 
-      // Planillas recientes
       const { data: recientes } = await supabase
         .from('planillas')
         .select('*')
@@ -158,27 +158,27 @@ export default function Dashboard() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-96 bg-slate-50 dark:bg-slate-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Cargando estadísticas...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Cargando estadísticas...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 space-y-6 transition-colors duration-300">
       {/* Encabezado */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-100 dark:border-slate-700 transition-colors">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Panel de Control</h2>
-            <p className="text-slate-600">
-              Bienvenido, <span className="font-semibold">{usuario?.nombre}</span>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Panel de Control</h2>
+            <p className="text-slate-600 dark:text-slate-400">
+              Bienvenido, <span className="font-semibold dark:text-slate-200">{usuario?.nombre}</span>
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-slate-600">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
             <Calendar className="w-4 h-4" />
             <span>{new Date().toLocaleDateString('es-CO', { 
               weekday: 'long', 
@@ -193,12 +193,12 @@ export default function Dashboard() {
       {/* Tarjetas de estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {tarjetaStats.map((stat, idx) => (
-          <div key={idx} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+          <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 hover:shadow-lg transition-all border border-slate-100 dark:border-slate-700">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600 mb-1">{stat.titulo}</p>
-                <p className="text-3xl font-bold text-slate-900">{stat.valor}</p>
-                <p className="text-xs text-slate-500 mt-2">{stat.descripcion}</p>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">{stat.titulo}</p>
+                <p className="text-3xl font-bold text-slate-900 dark:text-white">{stat.valor}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">{stat.descripcion}</p>
               </div>
               <div className={`${stat.color} p-3 rounded-lg`}>
                 <stat.icono className="w-6 h-6 text-white" />
@@ -211,22 +211,22 @@ export default function Dashboard() {
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico de barras - Horas por equipo */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-100 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Horas por Equipo</h3>
+            <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Horas por Equipo</h3>
           </div>
           {datosEquipos.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-slate-500">
+            <div className="flex items-center justify-center h-64 text-slate-500 dark:text-slate-400">
               Sin datos de equipos registrados
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={datosEquipos} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={100} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                <XAxis type="number" stroke="#94a3b8" />
+                <YAxis type="category" dataKey="name" width={100} stroke="#94a3b8" />
+                <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -234,13 +234,13 @@ export default function Dashboard() {
         </div>
 
         {/* Gráfico de torta - Tipos de carga */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-100 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <PieChartIcon className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Distribución por Tipo de Carga</h3>
+            <PieChartIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Distribución por Tipo de Carga</h3>
           </div>
           {datosTiposCarga.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-slate-500">
+            <div className="flex items-center justify-center h-64 text-slate-500 dark:text-slate-400">
               Sin datos de tipos de carga
             </div>
           ) : (
@@ -251,68 +251,69 @@ export default function Dashboard() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
+                  stroke="none"
                 >
                   {datosTiposCarga.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={tooltipStyle} />
               </PieChart>
             </ResponsiveContainer>
           )}
         </div>
 
         {/* Gráfico de turnos */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-100 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-purple-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Distribución por Turno</h3>
+            <Activity className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Distribución por Turno</h3>
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={datosTurnos}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+              <XAxis dataKey="name" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
+              <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Planillas recientes */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-100 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-orange-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Planillas Recientes</h3>
+            <TrendingUp className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Planillas Recientes</h3>
           </div>
           {planillasRecientes.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-slate-500">
+            <div className="flex items-center justify-center h-64 text-slate-500 dark:text-slate-400">
               No hay planillas registradas aún
             </div>
           ) : (
             <div className="space-y-3">
               {planillasRecientes.map((planilla, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-700 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Ship className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <Ship className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                      <p className="font-medium text-slate-900">{planilla.motonave || 'Sin nave'}</p>
-                      <p className="text-xs text-slate-600">
+                      <p className="font-medium text-slate-900 dark:text-white">{planilla.motonave || 'Sin nave'}</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
                         {planilla.tipo_carga} • {planilla.turno}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-slate-600">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
                       {new Date(planilla.creado_en).toLocaleDateString('es-CO')}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-500">
                       {planilla.auxiliar}
                     </p>
                   </div>
