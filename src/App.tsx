@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
@@ -11,15 +12,15 @@ import Admin from './components/Admin'
 import Login from './components/Login'
 
 // Componente para proteger rutas (solo usuarios logueados)
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children }: { children: ReactNode }) {
   const { usuario, cargando } = useAuth()
   
   if (cargando) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-150">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#0077B6] border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-slate-600">Cargando...</p>
+          <div className="w-12 h-12 border-4 border-[#0077B6] dark:border-blue-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400">Cargando...</p>
         </div>
       </div>
     )
@@ -33,9 +34,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Layout principal con Sidebar
-function Layout({ children }: { children: React.ReactNode }) {
+function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-150 flex">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         {children}
@@ -69,7 +70,9 @@ function AppRoutes() {
       
       <Route path="/turno/:id" element={
         <ProtectedRoute>
-          <TablaRegistros />
+          <Layout>
+            <TablaRegistros />
+          </Layout>
         </ProtectedRoute>
       } />
       
