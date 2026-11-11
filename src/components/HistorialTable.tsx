@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Filter, Edit2, Trash2, FileText, Eye, X, Image as ImageIcon, Ship } from 'lucide-react'
+import { Download, Filter, Edit2, Trash2, FileText, X, Image as ImageIcon, Ship } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as ExcelJS from 'exceljs'
 import jsPDF from 'jspdf'
@@ -119,7 +119,7 @@ export default function HistorialTable() {
     auxiliar: '',
   })
   const [mostrandoPreview, setMostrandoPreview] = useState<Detalle | null>(null)
-  const [imagenesPreview, setImagenesPreview] = useState<string[]>([])
+  const [imagenesPreview] = useState<string[]>([])
 
   useEffect(() => {
     cargarConfiguracion()
@@ -190,11 +190,6 @@ export default function HistorialTable() {
       console.error('Error:', error)
     }
     setCargando(false)
-  }
-
-  const cargarImagenesParaPreview = async (planillaId: number) => {
-    const evidenciasPlanilla = evidencias.get(planillaId) || []
-    setImagenesPreview(evidenciasPlanilla.map(e => e.imagen_url))
   }
 
   // Derivamos los registros aplanados para que la lógica de PDF/Excel siga funcionando igual
@@ -347,7 +342,7 @@ export default function HistorialTable() {
           12: { cellWidth: 30 },
         },
         margin: { left: margin, right: margin },
-        didParseCell: (data) => {
+        didParseCell: (data: any) => {
           if (data.section === 'body') {
             const tipo = data.row.raw[3]
             if (tipo === 'OPERADOR') { data.cell.styles.textColor = [30, 64, 175]; data.cell.styles.fontStyle = 'bold' }
@@ -570,12 +565,12 @@ export default function HistorialTable() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+    <div className="space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen transition-colors duration-300 p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Historial de Turnos</h2>
-            <p className="text-slate-600">{cargando ? 'Cargando...' : `Mostrando ${planillas.length} turnos`}</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Historial de Turnos</h2>
+            <p className="text-slate-600 dark:text-slate-400">{cargando ? 'Cargando...' : `Mostrando ${planillas.length} turnos`}</p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
@@ -591,42 +586,42 @@ export default function HistorialTable() {
         </div>
 
         {mostrarFiltros && (
-          <div className="bg-slate-50 rounded-lg p-4 mb-4">
+          <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 mb-4 transition-colors">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-slate-900">Filtros</h3>
-              <button onClick={limpiarFiltros} className="text-sm text-blue-600 hover:text-blue-800">Limpiar filtros</button>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Filtros</h3>
+              <button onClick={limpiarFiltros} className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">Limpiar filtros</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Fecha</label>
-                <input type="date" value={filtros.fecha} onChange={(e) => setFiltros(prev => ({ ...prev, fecha: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha</label>
+                <input type="date" value={filtros.fecha} onChange={(e) => setFiltros(prev => ({ ...prev, fecha: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Tipo de Carga</label>
-                <select value={filtros.tipoCarga} onChange={(e) => setFiltros(prev => ({ ...prev, tipoCarga: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de Carga</label>
+                <select value={filtros.tipoCarga} onChange={(e) => setFiltros(prev => ({ ...prev, tipoCarga: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors">
                   <option value="">Todos</option>
                   <option value="ACERO">ACERO</option><option value="COQUE">COQUE</option><option value="TUBERIA">TUBERIA</option>
                   <option value="ALAMBRON">ALAMBRON</option><option value="GRANELES">GRANELES</option><option value="CONTENEDORES">CONTENEDORES</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Turno</label>
-                <select value={filtros.turno} onChange={(e) => setFiltros(prev => ({ ...prev, turno: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Turno</label>
+                <select value={filtros.turno} onChange={(e) => setFiltros(prev => ({ ...prev, turno: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors">
                   <option value="">Todos</option><option value="DIA">DIA</option><option value="NOCHE">NOCHE</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Motonave</label>
-                <select value={filtros.motonave} onChange={(e) => setFiltros(prev => ({ ...prev, motonave: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Motonave</label>
+                <select value={filtros.motonave} onChange={(e) => setFiltros(prev => ({ ...prev, motonave: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors">
                   <option value="">Todas</option>
-                  {[...new Set(planillas.map(r => r.motonave))].map(m => <option key={m} value={m}>{m}</option>)}
+                  {[...new Set(planillas.map((r: any) => r.motonave))].map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Auxiliar</label>
-                <select value={filtros.auxiliar} onChange={(e) => setFiltros(prev => ({ ...prev, auxiliar: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Auxiliar</label>
+                <select value={filtros.auxiliar} onChange={(e) => setFiltros(prev => ({ ...prev, auxiliar: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors">
                   <option value="">Todos</option>
-                  {[...new Set(planillas.map(r => r.auxiliar))].map(a => <option key={a} value={a}>{a}</option>)}
+                  {[...new Set(planillas.map((r: any) => r.auxiliar))].map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
             </div>
@@ -635,10 +630,10 @@ export default function HistorialTable() {
       </div>
 
       {/* TABLA DE TURNOS AGRUPADOS */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700 transition-colors">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-800 text-white">
+            <thead className="bg-slate-800 dark:bg-slate-900 text-white">
               <tr>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Fecha</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase">Motonave</th>
@@ -650,31 +645,32 @@ export default function HistorialTable() {
                 <th className="px-3 py-3 text-center text-xs font-semibold uppercase">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700 transition-colors">
               {cargando ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">Cargando turnos...</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">Cargando turnos...</td></tr>
               ) : planillas.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">No hay turnos registrados. Ve a "Nuevo registro" para crear uno.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No hay turnos registrados. Ve a "Nuevo registro" para crear uno.</td></tr>
               ) : (
-                planillas.map((planilla, idx) => (
-                  <tr key={planilla.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-3 text-sm">{planilla.fecha}</td>
-                    <td className="px-3 py-3 text-sm font-semibold flex items-center gap-2"><Ship className="w-4 h-4 text-[#0077B6]" /> {planilla.motonave}</td>
-                    <td className="px-3 py-3 text-sm"><span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">{planilla.tipo_carga}</span></td>
-                    <td className="px-3 py-3 text-sm"><span className={`px-2 py-1 rounded text-xs font-medium ${planilla.turno === 'DIA' ? 'bg-yellow-100 text-yellow-800' : 'bg-indigo-100 text-indigo-800'}`}>{planilla.turno === 'DIA' ? '☀️' : '🌙'} {planilla.turno}</span></td>
-                    <td className="px-3 py-3 text-sm">{planilla.auxiliar}</td>
-                    <td className="px-3 py-3 text-sm text-center font-bold">{planilla.planilla_detalles?.length || 0}</td>
+                // ✅ CORRECCIÓN 1: Agregado tipado explícito (planilla: any)
+                planillas.map((planilla: any) => (
+                  <tr key={planilla.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td className="px-3 py-3 text-sm text-slate-900 dark:text-white">{planilla.fecha}</td>
+                    <td className="px-3 py-3 text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white"><Ship className="w-4 h-4 text-[#0077B6] dark:text-blue-400" /> {planilla.motonave}</td>
+                    <td className="px-3 py-3 text-sm"><span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs font-medium">{planilla.tipo_carga}</span></td>
+                    <td className="px-3 py-3 text-sm"><span className={`px-2 py-1 rounded text-xs font-medium ${planilla.turno === 'DIA' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'}`}>{planilla.turno === 'DIA' ? '☀️' : '🌙'} {planilla.turno}</span></td>
+                    <td className="px-3 py-3 text-sm text-slate-700 dark:text-slate-300">{planilla.auxiliar}</td>
+                    <td className="px-3 py-3 text-sm text-center font-bold text-slate-900 dark:text-white">{planilla.planilla_detalles?.length || 0}</td>
                     <td className="px-3 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${planilla.estado === 'EN_CURSO' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${planilla.estado === 'EN_CURSO' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300'}`}>
                         {planilla.estado === 'EN_CURSO' ? '🟢 En curso' : '🔒 Cerrado'}
                       </span>
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex justify-center gap-2">
-                        <button onClick={() => navigate(`/turno/${planilla.id}`)} className="text-blue-600 hover:text-blue-800 p-1" title="Ver/Editar Turno Completo">
+                        <button onClick={() => navigate(`/turno/${planilla.id}`)} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 p-1 transition-colors" title="Ver/Editar Turno Completo">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => eliminarPlanilla(planilla.id, planilla.motonave)} className="text-red-600 hover:text-red-800 p-1" title="Eliminar Turno">
+                        <button onClick={() => eliminarPlanilla(planilla.id, planilla.motonave)} className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 p-1 transition-colors" title="Eliminar Turno">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -688,73 +684,74 @@ export default function HistorialTable() {
       </div>
 
       {mostrandoPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-900">Vista Previa del Registro</h3>
-              <button onClick={() => setMostrandoPreview(null)} className="text-slate-500 hover:text-slate-700"><X className="w-6 h-6" /></button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 transition-colors">
+            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex justify-between items-center transition-colors">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Vista Previa del Registro</h3>
+              <button onClick={() => setMostrandoPreview(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <h4 className="font-semibold text-slate-800 mb-3 text-sm uppercase">Datos Generales</h4>
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg border border-slate-200 dark:border-slate-600 transition-colors">
+                <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-3 text-sm uppercase">Datos Generales</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                  <div><span className="text-slate-600">Fecha:</span> <strong>{mostrandoPreview.fecha}</strong></div>
-                  <div><span className="text-slate-600">Motonave:</span> <strong>{mostrandoPreview.motonave}</strong></div>
-                  <div><span className="text-slate-600">Auxiliar:</span> <strong>{mostrandoPreview.auxiliar}</strong></div>
-                  <div><span className="text-slate-600">Equipo:</span> <strong>{mostrandoPreview.equipo || 'N/A'}</strong></div>
-                  <div><span className="text-slate-600">Tipo de Carga:</span> <strong>{mostrandoPreview.tipo_carga}</strong></div>
-                  <div><span className="text-slate-600">Turno:</span> <strong>{mostrandoPreview.turno}</strong></div>
+                  <div><span className="text-slate-600 dark:text-slate-400">Fecha:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.fecha}</strong></div>
+                  <div><span className="text-slate-600 dark:text-slate-400">Motonave:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.motonave}</strong></div>
+                  <div><span className="text-slate-600 dark:text-slate-400">Auxiliar:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.auxiliar}</strong></div>
+                  <div><span className="text-slate-600 dark:text-slate-400">Equipo:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.equipo || 'N/A'}</strong></div>
+                  <div><span className="text-slate-600 dark:text-slate-400">Tipo de Carga:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.tipo_carga}</strong></div>
+                  <div><span className="text-slate-600 dark:text-slate-400">Turno:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.turno}</strong></div>
                 </div>
               </div>
               {mostrandoPreview.operador && (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <h4 className="font-semibold text-blue-800 mb-3 text-sm uppercase">Datos del Operador</h4>
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 text-sm uppercase">Datos del Operador</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><span className="text-slate-600">Nombre:</span> <strong>{mostrandoPreview.operador}</strong></div>
-                    <div><span className="text-slate-600">Cédula:</span> <strong>{mostrandoPreview.cedula || 'N/A'}</strong></div>
-                    <div><span className="text-slate-600">Fase:</span> <strong>{mostrandoPreview.fase || 'N/A'}</strong></div>
-                    <div><span className="text-slate-600">H.Inicial (Horómetro):</span> <strong>{mostrandoPreview.h_inicial || 'N/A'}</strong></div>
-                    <div><span className="text-slate-600">H.Final (Horómetro):</span> <strong>{mostrandoPreview.h_final || 'N/A'}</strong></div>
-                    <div><span className="text-slate-600">Hora Inicio (Reloj):</span> <strong>{mostrandoPreview.hora_inicio || 'N/A'}</strong></div>
-                    <div><span className="text-slate-600">Hora Final (Reloj):</span> <strong>{mostrandoPreview.hora_fin || 'N/A'}</strong></div>
-                    <div><span className="text-slate-600">N° Recibo:</span> <strong>{mostrandoPreview.n_recibo || 'N/A'}</strong></div>
-                    <div className="md:col-span-3"><span className="text-slate-600">Observaciones:</span> <strong>{mostrandoPreview.observaciones || 'Ninguna'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Nombre:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.operador}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Cédula:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.cedula || 'N/A'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Fase:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.fase || 'N/A'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">H.Inicial (Horómetro):</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.h_inicial || 'N/A'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">H.Final (Horómetro):</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.h_final || 'N/A'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Hora Inicio (Reloj):</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.hora_inicio || 'N/A'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Hora Final (Reloj):</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.hora_fin || 'N/A'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">N° Recibo:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.n_recibo || 'N/A'}</strong></div>
+                    <div className="md:col-span-3"><span className="text-slate-600 dark:text-slate-400">Observaciones:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.observaciones || 'Ninguna'}</strong></div>
                   </div>
                 </div>
               )}
               {mostrandoPreview.estibador && (
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                  <h4 className="font-semibold text-green-800 mb-3 text-sm uppercase">Datos del Estibador</h4>
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 transition-colors">
+                  <h4 className="font-semibold text-green-800 dark:text-green-300 mb-3 text-sm uppercase">Datos del Estibador</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><span className="text-slate-600">Nombre:</span> <strong>{mostrandoPreview.estibador}</strong></div>
-                    <div><span className="text-slate-600">Hora Llegada:</span> <strong>{mostrandoPreview.estib_hora_llegada || '-'}</strong></div>
-                    <div><span className="text-slate-600">Hora Salida:</span> <strong>{mostrandoPreview.estib_hora_salida || '-'}</strong></div>
-                    <div className="md:col-span-3"><span className="text-slate-600">Observaciones:</span> <strong>{mostrandoPreview.estib_observaciones || 'Ninguna'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Nombre:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.estibador}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Hora Llegada:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.estib_hora_llegada || '-'}</strong></div>
+                    <div><span className="text-slate-600 dark:text-slate-400">Hora Salida:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.estib_hora_salida || '-'}</strong></div>
+                    <div className="md:col-span-3"><span className="text-slate-600 dark:text-slate-400">Observaciones:</span> <strong className="text-slate-900 dark:text-white">{mostrandoPreview.estib_observaciones || 'Ninguna'}</strong></div>
                   </div>
                 </div>
               )}
               {imagenesPreview.length > 0 && (
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <h4 className="font-semibold text-purple-800 mb-3 text-sm uppercase flex items-center gap-2">
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800 transition-colors">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-300 mb-3 text-sm uppercase flex items-center gap-2">
                     <ImageIcon className="w-4 h-4" /> 
                     Evidencias Fotográficas ({imagenesPreview.length})
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {imagenesPreview.map((img, idx) => (
-                      <div key={idx} className="relative group bg-white rounded-lg overflow-hidden border border-purple-200">
+                    {/* ✅ CORRECCIÓN 2: _idx en lugar de idx (variable no usada) */}
+                    {imagenesPreview.map((img, _idx) => (
+                      <div key={_idx} className="relative group bg-white dark:bg-slate-700 rounded-lg overflow-hidden border border-purple-200 dark:border-purple-700 transition-colors">
                         <img 
                           src={img} 
-                          alt={`Evidencia ${idx + 1}`} 
-                          className="w-full h-40 object-contain bg-white"
+                          alt={`Evidencia ${_idx + 1}`} 
+                          className="w-full h-40 object-contain bg-white dark:bg-slate-600"
                           onError={(e) => {
                             console.error('❌ Error cargando imagen en modal:', img)
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
                             if (target.parentElement) {
                               target.parentElement.innerHTML = `
-                                <div class="flex items-center justify-center h-40 bg-red-50 text-red-600 text-sm p-2 text-center">
+                                <div class="flex items-center justify-center h-40 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm p-2 text-center">
                                   ⚠️ No se pudo cargar la imagen<br/>
-                                  <a href="${img}" target="_blank" class="text-blue-600 underline mt-1 block">
+                                  <a href="${img}" target="_blank" class="text-blue-600 dark:text-blue-400 underline mt-1 block">
                                     Abrir en nueva pestaña
                                   </a>
                                 </div>

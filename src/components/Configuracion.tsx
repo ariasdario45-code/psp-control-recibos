@@ -5,7 +5,7 @@ import { Save, Upload, Building2, Mail, Phone, MapPin, Palette, Image as ImageIc
 interface ConfigItem {
   clave: string
   valor: string
-  descripcion: string
+  descripcion?: string  // ← Agrega el '?' para hacerlo opcional
 }
 
 export default function Configuracion() {
@@ -110,20 +110,20 @@ export default function Configuracion() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Cargando configuración...</p>
+          <p className="text-slate-600 dark:text-slate-400">Cargando configuración...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen transition-colors duration-300 p-6">
       {/* Encabezado */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Configuración</h2>
-            <p className="text-slate-600">Personaliza la apariencia y datos de tu aplicación</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración</h2>
+            <p className="text-slate-600 dark:text-slate-400">Personaliza la apariencia y datos de tu aplicación</p>
           </div>
           <button
             onClick={guardarConfiguracion}
@@ -138,9 +138,9 @@ export default function Configuracion() {
 
       {/* Mensaje de notificación */}
       {mensaje.texto && (
-        <div className={`p-4 rounded-lg ${
-          mensaje.tipo === 'exito' ? 'bg-green-100 text-green-800 border border-green-300' :
-          'bg-red-100 text-red-800 border border-red-300'
+        <div className={`p-4 rounded-lg border transition-colors ${
+          mensaje.tipo === 'exito' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700' :
+          'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700'
         }`}>
           {mensaje.texto}
         </div>
@@ -148,21 +148,21 @@ export default function Configuracion() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Logo y Nombre */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <Building2 className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Identidad de la Empresa</h3>
+            <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Identidad de la Empresa</h3>
           </div>
 
           {/* Logo */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Logo de la Empresa</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Logo de la Empresa</label>
             <div className="flex items-center gap-4">
-              <div className="w-24 h-24 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden border-2 border-dashed border-slate-300">
+              <div className="w-24 h-24 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden border-2 border-dashed border-slate-300 dark:border-slate-600">
                 {logoPreview ? (
                   <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
-                  <ImageIcon className="w-10 h-10 text-slate-400" />
+                  <ImageIcon className="w-10 h-10 text-slate-400 dark:text-slate-500" />
                 )}
               </div>
               <div className="flex-1">
@@ -180,11 +180,11 @@ export default function Configuracion() {
                   <Upload className="w-4 h-4" />
                   Subir Logo
                 </button>
-                <p className="text-xs text-slate-500 mt-2">PNG, JPG o SVG. Máximo 2MB.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">PNG, JPG o SVG. Máximo 2MB.</p>
                 {logoPreview && (
                   <button
                     onClick={() => { setLogoPreview(''); handleInputChange('logo_url', '') }}
-                    className="text-xs text-red-600 hover:text-red-800 mt-1"
+                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 mt-1"
                   >
                     Quitar logo
                   </button>
@@ -195,51 +195,51 @@ export default function Configuracion() {
 
           {/* Nombre */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de la Aplicación</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre de la Aplicación</label>
             <input
               type="text"
               value={config.nombre_empresa || ''}
               onChange={(e) => handleInputChange('nombre_empresa', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               placeholder="Ej: PSP - Control de Recibos"
             />
           </div>
 
           {/* Subtítulo */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Subtítulo</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Subtítulo</label>
             <input
               type="text"
               value={config.subtitulo_empresa || ''}
               onChange={(e) => handleInputChange('subtitulo_empresa', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               placeholder="Ej: Operaciones Portuarias"
             />
           </div>
 
           {/* NIT */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">NIT de la Empresa</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">NIT de la Empresa</label>
             <input
               type="text"
               value={config.nit_empresa || ''}
               onChange={(e) => handleInputChange('nit_empresa', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               placeholder="Ej: 900.123.456-7"
             />
           </div>
         </div>
 
         {/* Información de Contacto */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <Mail className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Información de Contacto</h3>
+            <Mail className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Información de Contacto</h3>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 <Mail className="w-4 h-4 inline mr-1" />
                 Email de Contacto
               </label>
@@ -247,13 +247,13 @@ export default function Configuracion() {
                 type="email"
                 value={config.email_contacto || ''}
                 onChange={(e) => handleInputChange('email_contacto', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                 placeholder="contacto@empresa.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 <Phone className="w-4 h-4 inline mr-1" />
                 Teléfono
               </label>
@@ -261,13 +261,13 @@ export default function Configuracion() {
                 type="text"
                 value={config.telefono_contacto || ''}
                 onChange={(e) => handleInputChange('telefono_contacto', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                 placeholder="+57 300 000 0000"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 <MapPin className="w-4 h-4 inline mr-1" />
                 Dirección
               </label>
@@ -275,7 +275,7 @@ export default function Configuracion() {
                 type="text"
                 value={config.direccion_empresa || ''}
                 onChange={(e) => handleInputChange('direccion_empresa', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                 placeholder="Ciudad, País"
               />
             </div>
@@ -283,35 +283,35 @@ export default function Configuracion() {
         </div>
 
         {/* Personalización de Color */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <Palette className="w-5 h-5 text-purple-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Personalización de Color</h3>
+            <Palette className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Personalización de Color</h3>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Color Primario</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Color Primario</label>
             <div className="flex items-center gap-3">
               <input
                 type="color"
                 value={config.color_primario || '#1e40af'}
                 onChange={(e) => handleInputChange('color_primario', e.target.value)}
-                className="w-16 h-10 rounded cursor-pointer border border-slate-300"
+                className="w-16 h-10 rounded cursor-pointer border border-slate-300 dark:border-slate-600"
               />
               <input
                 type="text"
                 value={config.color_primario || '#1e40af'}
                 onChange={(e) => handleInputChange('color_primario', e.target.value)}
-                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                 placeholder="#1e40af"
               />
             </div>
-            <p className="text-xs text-slate-500 mt-2">Este color se usará en botones, enlaces y elementos principales.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Este color se usará en botones, enlaces y elementos principales.</p>
           </div>
 
           {/* Vista previa de colores */}
-          <div className="mt-6 p-4 bg-slate-50 rounded-lg">
-            <p className="text-xs font-medium text-slate-600 mb-2">Vista previa:</p>
+          <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Vista previa:</p>
             <div className="flex gap-2">
               <div
                 className="px-4 py-2 rounded text-white text-sm font-medium"
@@ -319,7 +319,7 @@ export default function Configuracion() {
               >
                 Botón Primario
               </div>
-              <div className="px-4 py-2 rounded bg-slate-200 text-slate-700 text-sm font-medium">
+              <div className="px-4 py-2 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium">
                 Botón Secundario
               </div>
             </div>
@@ -327,10 +327,10 @@ export default function Configuracion() {
         </div>
 
         {/* Vista Previa en Vivo */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
-            <ImageIcon className="w-5 h-5 text-orange-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Vista Previa</h3>
+            <ImageIcon className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Vista Previa</h3>
           </div>
 
           <div className="bg-slate-900 rounded-lg p-4">
@@ -356,9 +356,9 @@ export default function Configuracion() {
             </div>
           </div>
 
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-            <p className="text-xs font-medium text-slate-600 mb-2">Información de contacto:</p>
-            <div className="space-y-1 text-sm text-slate-700">
+          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Información de contacto:</p>
+            <div className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
               {config.email_contacto && <p>📧 {config.email_contacto}</p>}
               {config.telefono_contacto && <p>📞 {config.telefono_contacto}</p>}
               {config.direccion_empresa && <p>📍 {config.direccion_empresa}</p>}

@@ -255,25 +255,25 @@ export default function Admin() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Panel de Administración</h2>
-        <p className="text-slate-600">Gestiona los datos maestros del sistema</p>
+    <div className="space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen transition-colors duration-300 p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Panel de Administración</h2>
+        <p className="text-slate-600 dark:text-slate-400">Gestiona los datos maestros del sistema</p>
       </div>
 
       {mensaje.texto && (
-        <div className={`p-4 rounded-lg ${
-          mensaje.tipo === 'exito' ? 'bg-green-100 text-green-800 border border-green-300' :
-          mensaje.tipo === 'error' ? 'bg-red-100 text-red-800 border border-red-300' :
-          'bg-blue-100 text-blue-800 border border-blue-300'
+        <div className={`p-4 rounded-lg border transition-colors ${
+          mensaje.tipo === 'exito' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700' :
+          mensaje.tipo === 'error' ? 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700' :
+          'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-700'
         }`}>
           {mensaje.texto}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="font-semibold text-slate-900 mb-3">Tablas</h3>
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700 transition-colors">
+          <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Tablas</h3>
           <div className="space-y-1">
             {(Object.keys(configTablas) as TablaActiva[]).map((key) => {
               const cfg = configTablas[key]
@@ -285,13 +285,13 @@ export default function Admin() {
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                     tablaActiva === key
                       ? 'bg-blue-600 text-white'
-                      : 'text-slate-700 hover:bg-slate-100'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
                 >
                   <Icono className="w-4 h-4" />
                   <span>{cfg.nombre}</span>
                   <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${
-                    tablaActiva === key ? 'bg-white text-blue-600' : 'bg-slate-200 text-slate-600'
+                    tablaActiva === key ? 'bg-white text-blue-600' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}>
                     {key === tablaActiva ? registros.length : ''}
                   </span>
@@ -302,10 +302,10 @@ export default function Admin() {
         </div>
 
         <div className="lg:col-span-3 space-y-4">
-          <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 flex items-center justify-between border border-slate-200 dark:border-slate-700 transition-colors">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">{config.nombre}</h3>
-              <p className="text-sm text-slate-600">{registros.length} registros</p>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{config.nombre}</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{registros.length} registros</p>
             </div>
             <button
               onClick={abrirFormularioAgregar}
@@ -317,12 +317,12 @@ export default function Admin() {
           </div>
 
           {mostrandoFormulario && (
-            <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-200">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border-2 border-blue-200 dark:border-blue-800 transition-colors">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-slate-900">
+                <h4 className="font-semibold text-slate-900 dark:text-white">
                   {editandoId !== null ? 'Editar registro' : 'Agregar nuevo registro'}
                 </h4>
-                <button onClick={cancelarFormulario} className="text-slate-500 hover:text-slate-700">
+                <button onClick={cancelarFormulario} className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -332,14 +332,14 @@ export default function Admin() {
                   const opciones = getOpcionesCampo(col)
                   return (
                     <div key={col.key}>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                         {col.label} {col.key === 'nombre' && '*'}
                       </label>
                       {col.tipo === 'select' ? (
                         <select
                           value={formulario[col.key] || ''}
                           onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                         >
                           <option value="">Seleccionar</option>
                           {opciones.map(op => (
@@ -351,14 +351,14 @@ export default function Admin() {
                           type="number"
                           value={formulario[col.key] || ''}
                           onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: parseFloat(e.target.value) || 0 }))}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                         />
                       ) : (
                         <input
                           type="text"
                           value={formulario[col.key] || ''}
                           onChange={(e) => setFormulario(prev => ({ ...prev, [col.key]: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                           placeholder={`Ingrese ${col.label.toLowerCase()}`}
                         />
                       )}
@@ -387,10 +387,10 @@ export default function Admin() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700 transition-colors">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-800 text-white">
+                <thead className="bg-slate-800 dark:bg-slate-900 text-white">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">ID</th>
                     {config.columnas.map(col => (
@@ -401,40 +401,40 @@ export default function Admin() {
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700 transition-colors">
                   {cargando ? (
                     <tr>
-                      <td colSpan={config.columnas.length + 2} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={config.columnas.length + 2} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                         Cargando...
                       </td>
                     </tr>
                   ) : registros.length === 0 ? (
                     <tr>
-                      <td colSpan={config.columnas.length + 2} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={config.columnas.length + 2} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                         No hay registros. Haz clic en "Agregar" para crear uno.
                       </td>
                     </tr>
                   ) : (
                     registros.map((reg) => (
-                      <tr key={reg.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 text-sm font-mono text-slate-600">{reg.id}</td>
+                      <tr key={reg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-mono text-slate-600 dark:text-slate-400">{reg.id}</td>
                         {config.columnas.map(col => (
-                          <td key={col.key} className="px-4 py-3 text-sm text-slate-900">
-                            {reg[col.key] || <span className="text-slate-400">-</span>}
+                          <td key={col.key} className="px-4 py-3 text-sm text-slate-900 dark:text-white">
+                            {reg[col.key] || <span className="text-slate-400 dark:text-slate-500">-</span>}
                           </td>
                         ))}
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
                             <button
                               onClick={() => abrirFormularioEditar(reg)}
-                              className="text-blue-600 hover:text-blue-800 p-1"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 p-1 transition-colors"
                               title="Editar"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => eliminarRegistro(reg.id)}
-                              className="text-red-600 hover:text-red-800 p-1"
+                              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 p-1 transition-colors"
                               title="Eliminar"
                             >
                               <Trash2 className="w-4 h-4" />

@@ -178,10 +178,10 @@ export default function GestionUsuarios() {
 
   const getEstadoColor = (estado: string) => {
     switch (estado) {
-      case 'HABILITADO': return 'bg-green-100 text-green-800 border-green-300'
-      case 'PENDIENTE': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
-      case 'BLOQUEADO': return 'bg-red-100 text-red-800 border-red-300'
-      default: return 'bg-slate-100 text-slate-800'
+      case 'HABILITADO': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700'
+      case 'PENDIENTE': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700'
+      case 'BLOQUEADO': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700'
+      default: return 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300'
     }
   }
 
@@ -199,13 +199,13 @@ export default function GestionUsuarios() {
   const bloqueados = usuarios.filter(u => u.estado === 'BLOQUEADO').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen transition-colors duration-300 p-6">
       {/* Encabezado */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700 transition-colors">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Gestión de Usuarios</h2>
-            <p className="text-slate-600">Administra los códigos de acceso de auxiliares y administradores</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Gestión de Usuarios</h2>
+            <p className="text-slate-600 dark:text-slate-400">Administra los códigos de acceso de auxiliares y administradores</p>
           </div>
           <button
             onClick={() => {
@@ -223,30 +223,30 @@ export default function GestionUsuarios() {
 
       {/* Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border-l-4 border-green-500 transition-colors">
           <div className="flex items-center gap-3">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+            <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
             <div>
-              <p className="text-2xl font-bold text-slate-900">{habilitados}</p>
-              <p className="text-sm text-slate-600">Habilitados</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{habilitados}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Habilitados</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border-l-4 border-yellow-500 transition-colors">
           <div className="flex items-center gap-3">
-            <Clock className="w-8 h-8 text-yellow-600" />
+            <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
             <div>
-              <p className="text-2xl font-bold text-slate-900">{pendientes}</p>
-              <p className="text-sm text-slate-600">Pendientes</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{pendientes}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Pendientes</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border-l-4 border-red-500 transition-colors">
           <div className="flex items-center gap-3">
-            <Ban className="w-8 h-8 text-red-600" />
+            <Ban className="w-8 h-8 text-red-600 dark:text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-slate-900">{bloqueados}</p>
-              <p className="text-sm text-slate-600">Bloqueados</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{bloqueados}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Bloqueados</p>
             </div>
           </div>
         </div>
@@ -254,9 +254,9 @@ export default function GestionUsuarios() {
 
       {/* Mensaje */}
       {mensaje.texto && (
-        <div className={`p-4 rounded-lg ${
-          mensaje.tipo === 'exito' ? 'bg-green-100 text-green-800 border border-green-300' :
-          'bg-red-100 text-red-800 border border-red-300'
+        <div className={`p-4 rounded-lg border transition-colors ${
+          mensaje.tipo === 'exito' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700' :
+          'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700'
         }`}>
           {mensaje.texto}
         </div>
@@ -264,54 +264,54 @@ export default function GestionUsuarios() {
 
       {/* Formulario nuevo usuario / Editar */}
       {mostrandoFormulario && (
-        <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-200">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border-2 border-blue-200 dark:border-blue-800 transition-colors">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
               {usuarioEditando ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
             </h3>
-            <button onClick={() => { setMostrandoFormulario(false); setUsuarioEditando(null) }} className="text-slate-500 hover:text-slate-700">
+            <button onClick={() => { setMostrandoFormulario(false); setUsuarioEditando(null) }} className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Código *</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Código *</label>
               <input
                 type="text"
                 value={formulario.codigo}
                 onChange={(e) => setFormulario(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
                 disabled={!!usuarioEditando}
                 placeholder="Ej: AUX005"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 dark:disabled:bg-slate-700 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nombre completo *</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre completo *</label>
               <input
                 type="text"
                 value={formulario.nombre}
                 onChange={(e) => setFormulario(prev => ({ ...prev, nombre: e.target.value }))}
                 placeholder="Nombre del usuario"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
               <input
                 type="email"
                 value={formulario.email}
                 onChange={(e) => setFormulario(prev => ({ ...prev, email: e.target.value }))}
                 placeholder="correo@ejemplo.com"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Rol</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Rol</label>
               <select
                 value={formulario.rol}
                 onChange={(e) => setFormulario(prev => ({ ...prev, rol: e.target.value as 'ADMIN' | 'AUXILIAR' }))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               >
                 <option value="AUXILIAR">AUXILIAR</option>
                 <option value="ADMIN">ADMIN</option>
@@ -319,22 +319,22 @@ export default function GestionUsuarios() {
             </div>
             {!usuarioEditando && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña *</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contraseña *</label>
                 <input
                   type="password"
                   value={formulario.contrasena}
                   onChange={(e) => setFormulario(prev => ({ ...prev, contrasena: e.target.value }))}
                   placeholder="••••••••"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                 />
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Estado inicial</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Estado inicial</label>
               <select
                 value={formulario.estado}
                 onChange={(e) => setFormulario(prev => ({ ...prev, estado: e.target.value as 'HABILITADO' | 'PENDIENTE' | 'BLOQUEADO' }))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
               >
                 <option value="PENDIENTE">PENDIENTE (requiere aprobación)</option>
                 <option value="HABILITADO">HABILITADO (acceso inmediato)</option>
@@ -364,10 +364,10 @@ export default function GestionUsuarios() {
       )}
 
       {/* Tabla de usuarios */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700 transition-colors">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-800 text-white">
+            <thead className="bg-slate-800 dark:bg-slate-900 text-white">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Código</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Nombre</th>
@@ -378,24 +378,24 @@ export default function GestionUsuarios() {
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700 transition-colors">
               {cargando ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">Cargando...</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">Cargando...</td>
                 </tr>
               ) : usuarios.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">No hay usuarios registrados</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No hay usuarios registrados</td>
                 </tr>
               ) : (
                 usuarios.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm font-mono font-medium text-slate-900">{user.codigo}</td>
-                    <td className="px-4 py-3 text-sm text-slate-900">{user.nombre}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{user.email || '-'}</td>
+                  <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td className="px-4 py-3 text-sm font-mono font-medium text-slate-900 dark:text-white">{user.codigo}</td>
+                    <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">{user.nombre}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{user.email || '-'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                        user.rol === 'ADMIN' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                        user.rol === 'ADMIN' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
                       }`}>
                         <Shield className="w-3 h-3" />
                         {user.rol}
@@ -407,7 +407,7 @@ export default function GestionUsuarios() {
                         {user.estado}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
+                    <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
                       {new Date(user.fecha_registro).toLocaleDateString('es-CO')}
                     </td>
                     <td className="px-4 py-3">
@@ -462,7 +462,7 @@ export default function GestionUsuarios() {
 
                         {/* Indicador de protegido */}
                         {user.codigo === 'ADMIN001' && (
-                          <span className="flex items-center gap-1 px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs" title="Usuario protegido">
+                          <span className="flex items-center gap-1 px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs" title="Usuario protegido">
                             <Shield className="w-3 h-3" />
                             Protegido
                           </span>

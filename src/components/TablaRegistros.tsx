@@ -172,7 +172,7 @@ export default function TablaRegistros() {
     if (error) {
       setMensaje({ tipo: 'error', texto: `Error al guardar: ${error.message}` })
     } else {
-      setMensaje({ tipo: 'exito', texto: ' Cambios guardados' })
+      setMensaje({ tipo: 'exito', texto: '✅ Cambios guardados' })
       setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000)
     }
   }, [])
@@ -334,7 +334,7 @@ export default function TablaRegistros() {
     }
     setArchivosNuevos([])
     cargarEvidencias()
-    setMensaje({ tipo: 'exito', texto: ' Fotos subidas correctamente' })
+    setMensaje({ tipo: 'exito', texto: '✅ Fotos subidas correctamente' })
   }
 
   const cerrarTurno = async () => {
@@ -353,13 +353,13 @@ export default function TablaRegistros() {
       return
     }
 
-    setMensaje({ tipo: 'exito', texto: ' Turno cerrado exitosamente. Puedes seguir editando si lo necesitas.' })
+    setMensaje({ tipo: 'exito', texto: '✅ Turno cerrado exitosamente. Puedes seguir editando si lo necesitas.' })
     setTimeout(() => { cargarPlanilla() }, 1500)
   }
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-[#0077B6] dark:text-blue-400 mx-auto" />
           <p className="mt-4 text-slate-600 dark:text-slate-400">Cargando turno...</p>
@@ -370,7 +370,7 @@ export default function TablaRegistros() {
 
   if (!planilla) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors">
         <div className="text-center">
           <XCircle className="w-12 h-12 text-red-500 mx-auto" />
           <p className="mt-4 text-slate-600 dark:text-slate-400">No se encontró el turno</p>
@@ -383,9 +383,9 @@ export default function TablaRegistros() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       {/* Header del Turno */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 transition-colors">
         <div className="max-w-full mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -404,7 +404,7 @@ export default function TablaRegistros() {
                   ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                   : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300'
               }`}>
-                {planilla.estado === 'EN_CURSO' ? ' En curso' : ' Cerrado (Editable)'}
+                {planilla.estado === 'EN_CURSO' ? '🟢 En curso' : '🔒 Cerrado (Editable)'}
               </span>
 
               {planilla.estado === 'EN_CURSO' && (
@@ -436,9 +436,9 @@ export default function TablaRegistros() {
 
       {/* Tabla de Registros */}
       <div className="max-w-full mx-auto p-6">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
           {/* Toolbar */}
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between bg-slate-50 dark:bg-slate-700/50 gap-3">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between bg-slate-50 dark:bg-slate-700/50 gap-3 transition-colors">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#0077B6] dark:text-blue-400" />
               <h2 className="font-medium text-slate-900 dark:text-white">Registros del Turno</h2>
@@ -484,7 +484,7 @@ export default function TablaRegistros() {
           {/* Tabla */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-100 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600">
+              <thead className="bg-slate-100 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600 transition-colors">
                 <tr>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase">N°</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase">Equipo</th>
@@ -501,48 +501,48 @@ export default function TablaRegistros() {
                   <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700 transition-colors">
                 {registros.map((registro, index) => (
                   <tr key={registro.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                     <td className="px-3 py-2 text-sm font-medium text-slate-900 dark:text-white">{index + 1}</td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.equipo} onChange={(e) => actualizarCelda(index, 'equipo', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" placeholder="Ej: ELEVADOR 01611" list={`lista-equipos-${index}`} />
+                      <input type="text" value={registro.equipo} onChange={(e) => actualizarCelda(index, 'equipo', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" placeholder="Ej: ELEVADOR 01611" list={`lista-equipos-${index}`} />
                       <datalist id={`lista-equipos-${index}`}>{equipos.map((eq) => (<option key={eq.id} value={eq.nombre} />))}</datalist>
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.proveedor} onChange={(e) => actualizarCelda(index, 'proveedor', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" placeholder="Ej: PALERMO" list={`lista-proveedores-${index}`} />
+                      <input type="text" value={registro.proveedor} onChange={(e) => actualizarCelda(index, 'proveedor', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" placeholder="Ej: PALERMO" list={`lista-proveedores-${index}`} />
                       <datalist id={`lista-proveedores-${index}`}>{proveedores.map((prov, i) => (<option key={i} value={prov} />))}</datalist>
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.operador} onChange={(e) => actualizarCelda(index, 'operador', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" placeholder="Nombre del operador" list={`lista-operadores-${index}`} />
+                      <input type="text" value={registro.operador} onChange={(e) => actualizarCelda(index, 'operador', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" placeholder="Nombre del operador" list={`lista-operadores-${index}`} />
                       <datalist id={`lista-operadores-${index}`}>{operadores.map((op) => (<option key={op.id} value={op.nombre} />))}</datalist>
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.cedula} onChange={(e) => actualizarCelda(index, 'cedula', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" placeholder="N/A" />
+                      <input type="text" value={registro.cedula} onChange={(e) => actualizarCelda(index, 'cedula', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" placeholder="N/A" />
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.fase} onChange={(e) => actualizarCelda(index, 'fase', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" placeholder="1RA FASE" list={`lista-fases-${index}`} />
+                      <input type="text" value={registro.fase} onChange={(e) => actualizarCelda(index, 'fase', e.target.value)} className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" placeholder="1RA FASE" list={`lista-fases-${index}`} />
                       <datalist id={`lista-fases-${index}`}>{fases.map((f) => (<option key={f.id} value={f.nombre} />))}</datalist>
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="number" step="0.1" value={registro.h_inicial ?? ''} onChange={(e) => actualizarCelda(index, 'h_inicial', e.target.value === '' ? null : parseFloat(e.target.value))} className="w-20 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
+                      <input type="number" step="0.1" value={registro.h_inicial ?? ''} onChange={(e) => actualizarCelda(index, 'h_inicial', e.target.value === '' ? null : parseFloat(e.target.value))} className="w-20 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" />
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="number" step="0.1" value={registro.h_final ?? ''} onChange={(e) => actualizarCelda(index, 'h_final', e.target.value === '' ? null : parseFloat(e.target.value))} className={`w-20 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white ${!registro.h_final && registro.h_inicial ? 'border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`} />
+                      <input type="number" step="0.1" value={registro.h_final ?? ''} onChange={(e) => actualizarCelda(index, 'h_final', e.target.value === '' ? null : parseFloat(e.target.value))} className={`w-20 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors ${!registro.h_final && registro.h_inicial ? 'border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`} />
                     </td>
 
                     <td className="px-3 py-2">
                       <select
                         value={registro.hora_inicio}
                         onChange={(e) => actualizarCelda(index, 'hora_inicio', e.target.value)}
-                        className="w-24 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                        className="w-24 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors"
                       >
                         <option value="">--:--</option>
                         {opcionesHora.map(h => (<option key={h} value={h}>{h}</option>))}
@@ -553,7 +553,7 @@ export default function TablaRegistros() {
                       <select
                         value={registro.hora_fin}
                         onChange={(e) => actualizarCelda(index, 'hora_fin', e.target.value)}
-                        className={`w-24 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white ${!registro.hora_fin && registro.hora_inicio ? 'border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                        className={`w-24 px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors ${!registro.hora_fin && registro.hora_inicio ? 'border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
                       >
                         <option value="">--:--</option>
                         {opcionesHora.map(h => (<option key={h} value={h}>{h}</option>))}
@@ -561,11 +561,11 @@ export default function TablaRegistros() {
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.n_recibo} onChange={(e) => actualizarCelda(index, 'n_recibo', e.target.value)} className="w-20 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
+                      <input type="text" value={registro.n_recibo} onChange={(e) => actualizarCelda(index, 'n_recibo', e.target.value)} className="w-20 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" />
                     </td>
 
                     <td className="px-3 py-2">
-                      <input type="text" value={registro.observaciones} onChange={(e) => actualizarCelda(index, 'observaciones', e.target.value)} className="w-32 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white" placeholder="1H ALIMENTO" />
+                      <input type="text" value={registro.observaciones} onChange={(e) => actualizarCelda(index, 'observaciones', e.target.value)} className="w-32 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm focus:ring-1 focus:ring-[#0077B6] outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors" placeholder="1H ALIMENTO" />
                     </td>
 
                     <td className="px-3 py-2">
@@ -590,7 +590,7 @@ export default function TablaRegistros() {
 
         {/* Sección de Evidencias */}
         {evidencias.length > 0 && (
-          <div className="mt-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+          <div className="mt-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-4 transition-colors">
             <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
               <ImageIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               Evidencias Fotográficas del Turno ({evidencias.length})
@@ -606,7 +606,7 @@ export default function TablaRegistros() {
         )}
 
         {/* Leyenda */}
-        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors">
           <h3 className="font-medium text-blue-900 dark:text-blue-300 mb-2 flex items-center gap-2">
             <Clock className="w-4 h-4" />
             Instrucciones
