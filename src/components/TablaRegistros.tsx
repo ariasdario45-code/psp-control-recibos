@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
-  Plus, Trash2, ArrowLeft, Lock, Clock, FileText, Loader2, XCircle, Image as ImageIcon, Save, Wand2
+  Plus, Trash2, ArrowLeft, Lock, Clock, FileText, Loader2, XCircle, Image as ImageIcon, Save, Wand2, Edit2, X
 } from 'lucide-react'
 
 interface Registro {
@@ -60,7 +60,7 @@ export default function TablaRegistros() {
   const [cargando, setCargando] = useState(true)
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' })
   const [archivosNuevos, setArchivosNuevos] = useState<File[]>([])
-  const [autoHorasAsignadas, setAutoHorasAsignadas] = useState(false)
+  const [registroEditando, setRegistroEditando] = useState<Registro | null>(null)
 
   const [equipos, setEquipos] = useState<any[]>([])
   const [operadores, setOperadores] = useState<any[]>([])
@@ -75,6 +75,9 @@ export default function TablaRegistros() {
     'SOCIEDAD EPAR'
   ])
 
+  const mensajeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoHorasRef = useRef(false)
+
   useEffect(() => {
     if (id) {
       cargarPlanilla()
@@ -84,10 +87,21 @@ export default function TablaRegistros() {
     }
   }, [id])
 
+  const mostrarMensaje = (tipo: string, texto: string, duracion = 3000) => {
+    setMensaje({ tipo, texto })
+    if (mensajeTimeoutRef.current) {
+      clearTimeout(mensajeTimeoutRef.current)
+    }
+    mensajeTimeoutRef.current = setTimeout(() => {
+      setMensaje({ tipo: '', texto: '' })
+      mensajeTimeoutRef.current = null
+    }, duracion)
+  }
+
   const cargarPlanilla = async () => {
     const { data, error } = await supabase.from('planillas').select('*').eq('id', id).single()
     if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al cargar la planilla' })
+      mostrarMensaje('error', 'Error al cargar la planilla')
       return
     }
     setPlanilla(data)
@@ -101,7 +115,7 @@ export default function TablaRegistros() {
       .order('id', { ascending: true })
 
     if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al cargar registros' })
+      mostrarMensaje('error', 'Error al cargar registros')
       setCargando(false)
       return
     }
@@ -170,10 +184,9 @@ export default function TablaRegistros() {
       .eq('id', registro.id)
 
     if (error) {
-      setMensaje({ tipo: 'error', texto: `Error al guardar: ${error.message}` })
+      mostrarMensaje('error', `Error al guardar: ${error.message}`)
     } else {
-      setMensaje({ tipo: 'exito', texto: '✅ Cambios guardados' })
-      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000)
+      mostrarMensaje('exito', '✅ Cambios guardados', 1500)
     }
   }, [])
 
@@ -187,7 +200,7 @@ export default function TablaRegistros() {
     }, 1000)
   }
 
-  const ejecutarAsignacionHoras = useCallback((horaSugerida: string) => {
+  const ejecutarAsignacionHoras = useCallback(async (horaSugerida: string) => {
     let cambiosRealizados = 0
     
     const nuevosRegistros = registros.map(reg => {
@@ -198,60 +211,42 @@ export default function TablaRegistros() {
       return reg
     })
 
-    if (cambiosRealizados === 0) return false
+    if (cambiosRealizados === 0) {
+      mostrarMensaje('info', 'ℹ️ No hay registros pendientes de hora de salida.')
+      return false
+    }
 
     setRegistros(nuevosRegistros)
-    setMensaje({ tipo: 'exito', texto: `⏰ Se asignó automáticamente ${horaSugerida} a ${cambiosRealizados} registro(s).` })
+    mostrarMensaje('exito', `⏰ Se asignó automáticamente ${horaSugerida} a ${cambiosRealizados} registro(s).`, 4000)
     
-    nuevosRegistros.forEach(reg => {
-      supabase
-        .from('planilla_detalles')
-        .update({ hora_fin: reg.hora_fin })
-        .eq('id', reg.id)
-    })
+    await Promise.all(
+      nuevosRegistros
+        .filter(reg => reg.hora_fin === horaSugerida)
+        .map(async (reg) => {
+          const { error } = await supabase
+            .from('planilla_detalles')
+            .update({ hora_fin: reg.hora_fin })
+            .eq('id', reg.id)
+          
+          if (error) {
+            console.error('Error al guardar hora_fin:', error)
+          }
+        })
+    )
     
     return true
   }, [registros])
 
-  useEffect(() => {
-    if (!planilla || autoHorasAsignadas || planilla.estado !== 'EN_CURSO' || registros.length === 0) return
+ // ✅ Auto-asignado DESACTIVADO - Solo manual con botón "Auto Horas Salida"
+// El auxiliar decide cuándo asignar las horas de salida
 
-    const verificarYAsignarHoras = () => {
-      const ahora = new Date()
-      const horaActualMinutos = ahora.getHours() * 60 + ahora.getMinutes()
-
-      let horaSugerida = ''
-      let minutosLimite = 0
-
-      if (planilla.turno === 'DIA') {
-        minutosLimite = 19 * 60 + 15
-        horaSugerida = '19:30'
-      } else if (planilla.turno === 'NOCHE') {
-        minutosLimite = 7 * 60 + 15
-        horaSugerida = '07:30'
-      } else {
-        return
-      }
-
-      if (horaActualMinutos >= minutosLimite) {
-        const exito = ejecutarAsignacionHoras(horaSugerida)
-        if (exito) {
-          setAutoHorasAsignadas(true)
-        }
-      }
-    }
-
-    verificarYAsignarHoras()
-    const intervalo = setInterval(verificarYAsignarHoras, 60000)
-
-    return () => clearInterval(intervalo)
-  }, [planilla, autoHorasAsignadas, registros, ejecutarAsignacionHoras])
-
-  const autoCompletarHorasSalida = () => {
+  const autoCompletarHorasSalida = async () => {
     if (!planilla) return
     const horaSugerida = planilla.turno === 'DIA' ? '19:30' : '07:30'
-    const exito = ejecutarAsignacionHoras(horaSugerida)
-    if (exito) setAutoHorasAsignadas(true)
+    const exito = await ejecutarAsignacionHoras(horaSugerida)
+    if (exito) {
+      autoHorasRef.current = true
+    }
   }
 
   const agregarFila = async () => {
@@ -277,7 +272,7 @@ export default function TablaRegistros() {
       .single()
 
     if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al agregar fila' })
+      mostrarMensaje('error', 'Error al agregar fila')
       return
     }
 
@@ -303,6 +298,7 @@ export default function TablaRegistros() {
     }
 
     setRegistros([...registros, nuevoRegistro])
+    mostrarMensaje('exito', '✅ Registro agregado', 2000)
   }
 
   const eliminarFila = async (index: number) => {
@@ -311,18 +307,54 @@ export default function TablaRegistros() {
 
     const { error } = await supabase.from('planilla_detalles').delete().eq('id', registro.id)
     if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al eliminar' })
+      mostrarMensaje('error', 'Error al eliminar')
       return
     }
 
     const nuevosRegistros = registros.filter((_, i) => i !== index)
     setRegistros(nuevosRegistros)
-    setMensaje({ tipo: 'exito', texto: 'Registro eliminado' })
+    mostrarMensaje('exito', 'Registro eliminado', 2000)
+  }
+
+  // ✅ NUEVA FUNCIÓN: Guardar edición desde modal
+  const guardarEdicion = async () => {
+    if (!registroEditando) return
+
+    const { error } = await supabase
+      .from('planilla_detalles')
+      .update({
+        equipo: registroEditando.equipo,
+        proveedor: registroEditando.proveedor,
+        operador: registroEditando.operador,
+        cedula: registroEditando.cedula,
+        fase: registroEditando.fase,
+        h_inicial: registroEditando.h_inicial,
+        h_final: registroEditando.h_final,
+        hora_inicio: registroEditando.hora_inicio,
+        hora_fin: registroEditando.hora_fin,
+        n_recibo: registroEditando.n_recibo ? parseInt(registroEditando.n_recibo) : null,
+        observaciones: registroEditando.observaciones,
+        horometro_inicial: registroEditando.horometro_inicial,
+        horometro_final: registroEditando.horometro_final
+      })
+      .eq('id', registroEditando.id)
+
+    if (error) {
+      mostrarMensaje('error', `Error al guardar: ${error.message}`)
+    } else {
+      // Actualizar el registro en el estado local
+      const nuevosRegistros = registros.map(reg => 
+        reg.id === registroEditando.id ? registroEditando : reg
+      )
+      setRegistros(nuevosRegistros)
+      setRegistroEditando(null)
+      mostrarMensaje('exito', '✅ Registro actualizado', 2000)
+    }
   }
 
   const subirFotosAdicionales = async () => {
     if (archivosNuevos.length === 0) return
-    setMensaje({ tipo: 'exito', texto: 'Subiendo fotos...' })
+    mostrarMensaje('info', 'Subiendo fotos...', 5000)
 
     for (const file of archivosNuevos) {
       const fileName = `${Date.now()}_${file.name}`
@@ -333,8 +365,8 @@ export default function TablaRegistros() {
       }
     }
     setArchivosNuevos([])
-    cargarEvidencias()
-    setMensaje({ tipo: 'exito', texto: '✅ Fotos subidas correctamente' })
+    await cargarEvidencias()
+    mostrarMensaje('exito', '✅ Fotos subidas correctamente', 3000)
   }
 
   const cerrarTurno = async () => {
@@ -349,11 +381,11 @@ export default function TablaRegistros() {
       .eq('id', id)
 
     if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al cerrar turno' })
+      mostrarMensaje('error', 'Error al cerrar turno')
       return
     }
 
-    setMensaje({ tipo: 'exito', texto: '✅ Turno cerrado exitosamente. Puedes seguir editando si lo necesitas.' })
+    mostrarMensaje('exito', '✅ Turno cerrado exitosamente. Puedes seguir editando.', 3000)
     setTimeout(() => { cargarPlanilla() }, 1500)
   }
 
@@ -427,10 +459,178 @@ export default function TablaRegistros() {
 
       {/* Mensajes */}
       {mensaje.texto && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${
-          mensaje.tipo === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 ${
+          mensaje.tipo === 'error' ? 'bg-red-500 text-white' : 
+          mensaje.tipo === 'info' ? 'bg-blue-500 text-white' :
+          'bg-green-500 text-white'
         }`}>
           {mensaje.texto}
+        </div>
+      )}
+
+      {/* Modal de Edición */}
+      {registroEditando && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700">
+            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Editar Registro #{registroEditando.numero}</h3>
+              <button onClick={() => setRegistroEditando(null)} className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Equipo</label>
+                  <input
+                    type="text"
+                    value={registroEditando.equipo}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, equipo: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    list="lista-equipos-modal"
+                  />
+                  <datalist id="lista-equipos-modal">
+                    {equipos.map((eq) => <option key={eq.id} value={eq.nombre} />)}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Proveedor</label>
+                  <input
+                    type="text"
+                    value={registroEditando.proveedor}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, proveedor: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    list="lista-proveedores-modal"
+                  />
+                  <datalist id="lista-proveedores-modal">
+                    {proveedores.map((prov, i) => <option key={i} value={prov} />)}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Operador</label>
+                  <input
+                    type="text"
+                    value={registroEditando.operador}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, operador: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    list="lista-operadores-modal"
+                  />
+                  <datalist id="lista-operadores-modal">
+                    {operadores.map((op) => <option key={op.id} value={op.nombre} />)}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cédula</label>
+                  <input
+                    type="text"
+                    value={registroEditando.cedula}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, cedula: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fase</label>
+                  <input
+                    type="text"
+                    value={registroEditando.fase}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, fase: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    list="lista-fases-modal"
+                  />
+                  <datalist id="lista-fases-modal">
+                    {fases.map((f) => <option key={f.id} value={f.nombre} />)}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">H. Inicial</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={registroEditando.h_inicial ?? ''}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, h_inicial: e.target.value === '' ? null : parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">H. Final</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={registroEditando.h_final ?? ''}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, h_final: e.target.value === '' ? null : parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hora Inicio</label>
+                  <select
+                    value={registroEditando.hora_inicio}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, hora_inicio: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="">--:--</option>
+                    {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hora Fin</label>
+                  <select
+                    value={registroEditando.hora_fin}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, hora_fin: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="">--:--</option>
+                    {opcionesHora.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">N° Recibo</label>
+                  <input
+                    type="text"
+                    value={registroEditando.n_recibo}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, n_recibo: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Observaciones</label>
+                  <input
+                    type="text"
+                    value={registroEditando.observaciones}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, observaciones: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-4 flex justify-end gap-3">
+              <button
+                onClick={() => setRegistroEditando(null)}
+                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarEdicion}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Guardar Cambios
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -569,9 +769,22 @@ export default function TablaRegistros() {
                     </td>
 
                     <td className="px-3 py-2">
-                      <button onClick={() => eliminarFila(index)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Eliminar registro">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-1">
+                        <button 
+                          onClick={() => setRegistroEditando(registro)} 
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors" 
+                          title="Editar registro"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => eliminarFila(index)} 
+                          className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" 
+                          title="Eliminar registro"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
