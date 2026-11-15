@@ -81,7 +81,7 @@ export default function Dashboard() {
       const equiposMap: Record<string, number> = {}
       detalles?.forEach(d => {
         if (d.equipo) {
-          const horas = (d.h_final || 0) - (d.h_inicial || 0)
+const horas = Math.abs(d.h_final - d.h_inicial)
           equiposMap[d.equipo] = (equiposMap[d.equipo] || 0) + horas
         }
       })
