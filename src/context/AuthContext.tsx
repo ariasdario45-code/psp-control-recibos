@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 
 // Definimos la estructura del usuario
@@ -10,11 +10,11 @@ export interface Usuario {
   email?: string
 }
 
-// Definimos el tipo del contexto (AGREGAMOS esAdmin AQUÍ)
+// Definimos el tipo del contexto
 interface AuthContextType {
   usuario: Usuario | null
   cargando: boolean
-  esAdmin: boolean // <-- ESTA LÍNEA FALTABA
+  esAdmin: boolean
   login: (usuarioInput: string, contrasena: string) => Promise<boolean>
   logout: () => void
 }
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('psp_usuario')
   }
 
-  // ✅ CALCULAR SI ES ADMIN (ESTA LÓGICA FALTABA)
+  // ✅ CALCULAR SI ES ADMIN
   const esAdmin = usuario?.rol === 'admin' || usuario?.rol === 'superadmin'
 
   return (

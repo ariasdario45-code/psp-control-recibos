@@ -1,4 +1,3 @@
-import React from 'react';
 import LogoPalermo from './LogoPalermo';
 
 export default function Header() {

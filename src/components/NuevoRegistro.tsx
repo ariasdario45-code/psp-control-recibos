@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save, X, Trash2, Edit2, Camera, Eye, FileText, CheckCircle } from 'lucide-react'
-import OCRScanner from './OCRScanner'
-import type { ExtractedData } from '../lib/ocr/receiptParser'
+import { Save, X, Trash2, Edit2, Camera, Eye, FileText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -74,11 +72,6 @@ export default function NuevoRegistro() {
   const [imagenFile, setImagenFile] = useState<File | null>(null)
   const [subiendoImagen, setSubiendoImagen] = useState(false)
   const [mostrandoPreview, setMostrandoPreview] = useState<Registro | null>(null)
-  
-  // ✅ ESTADOS PARA OCR INTELIGENTE
-  const [mostrarOCR, setMostrarOCR] = useState(false)
-  const [ocrData, setOcrData] = useState<ExtractedData | null>(null)
-  const [ocrEditValues, setOcrEditValues] = useState<ExtractedData | null>(null)
 
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0]
@@ -165,7 +158,7 @@ export default function NuevoRegistro() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setRegistroActual(prev => ({
+    setRegistroActual((prev: Registro) => ({
       ...prev,
       [name]: name === 'id' || name === 'hInicial' || name === 'hFinal' || name === 'nRecibo' ? parseFloat(value) || 0 : value,
     }))
@@ -182,11 +175,11 @@ export default function NuevoRegistro() {
     }
 
     if (editandoId !== null) {
-      setRegistros(prev => prev.map(r => (r.id === editandoId ? { ...registroActual, id: editandoId } : r)))
+      setRegistros((prev: Registro[]) => prev.map(r => (r.id === editandoId ? { ...registroActual, id: editandoId } : r)))
       setEditandoId(null)
     } else {
       const nuevoId = registros.length > 0 ? Math.max(...registros.map(r => r.id)) + 1 : 1
-      setRegistros(prev => [...prev, { ...registroActual, id: nuevoId }])
+      setRegistros((prev: Registro[]) => [...prev, { ...registroActual, id: nuevoId }])
     }
 
     setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
@@ -200,7 +193,7 @@ export default function NuevoRegistro() {
 
   const eliminarRegistroLocal = (id: number) => {
     if (confirm('¿Estás seguro de eliminar este registro?')) {
-      setRegistros(prev => prev.filter(r => r.id !== id))
+      setRegistros((prev: Registro[]) => prev.filter(r => r.id !== id))
       if (editandoId === id) {
         setEditandoId(null)
         setRegistroActual({ id: 0, equipo: '', proveedor: '', operador: '', cedula: '', fase: '', hInicial: 0, hFinal: 0, horaInicio: '07:30', horaFin: '19:30', nRecibo: 0, observaciones: '', estibador: '', estib_hora_llegada: '', estib_hora_salida: '', estib_observaciones: '' })
@@ -255,117 +248,6 @@ export default function NuevoRegistro() {
     reader.onloadend = () => setImagenPreview(reader.result as string)
     reader.readAsDataURL(file)
     setImagenFile(file)
-  }
-
-// ✅ HANDLER PARA DATOS EXTRAÍDOS POR OCR (AUTO-LLENADO INMEDIATO)
-const handleOCRExtracted = (data: ExtractedData) => {
-  setOcrData(data)
-  setOcrEditValues({ ...data }) // Copia editable para el panel
-  setMostrarOCR(false)
-  
-  // ✅ AUTO-LLENAR FORMULARIO INMEDIATAMENTE (sin importar confianza)
-  if (data.numeroRecibo) {
-    const numRecibo = parseInt(data.numeroRecibo) || 0
-    setRegistroActual(prev => ({ ...prev, nRecibo: numRecibo }))
-  }
-  if (data.fecha) {
-    setFecha(data.fecha)
-  }
-  if (data.motonave) {
-    setMotonave(data.motonave)
-  }
-  if (data.equipo) {
-    setRegistroActual(prev => ({ ...prev, equipo: data.equipo! }))
-  }
-  if (data.horaInicio) {
-    setRegistroActual(prev => ({ ...prev, horaInicio: data.horaInicio! }))
-  }
-  if (data.horaFinal) {
-    setRegistroActual(prev => ({ ...prev, horaFin: data.horaFinal! }))
-  }
-  if (data.tipoCarga) {
-    setTipoCarga(data.tipoCarga)
-  }
-  if (data.observaciones) {
-    setRegistroActual(prev => ({ ...prev, observaciones: data.observaciones! }))
-  }
-  
-  // Contar campos extraídos
-  const camposLlenos = [
-    data.numeroRecibo, data.fecha, data.motonave, 
-    data.equipo, data.horaInicio, data.horaFinal,
-    data.tipoCarga, data.observaciones
-  ].filter(Boolean).length
-  
-  alert(`✅ OCR completado: ${camposLlenos}/8 campos extraídos.\n\nRevisa los campos (colores en el panel) y corrige si es necesario.`)
-}
-
-  // ✅ FUNCIONES AUXILIARES PARA UX INTELIGENTE
-  const getConfidenceColor = (confidence: number | undefined): string => {
-    if (!confidence) return 'bg-red-100 border-red-400 text-red-900'
-    if (confidence >= 90) return 'bg-green-100 border-green-400 text-green-900'
-    if (confidence >= 60) return 'bg-yellow-100 border-yellow-400 text-yellow-900'
-    return 'bg-red-100 border-red-400 text-red-900'
-  }
-
-  const getConfidenceLabel = (confidence: number | undefined): string => {
-    if (!confidence) return '🔴 Bajo'
-    if (confidence >= 90) return '🟢 Alto'
-    if (confidence >= 60) return '🟡 Medio'
-    return '🔴 Bajo'
-  }
-
-  const aplicarCampo = (campo: string, valor: string) => {
-    if (!ocrEditValues) return
-    
-    switch (campo) {
-      case 'numeroRecibo':
-        setRegistroActual(prev => ({ ...prev, nRecibo: parseInt(valor) || 0 }))
-        break
-      case 'fecha':
-        setFecha(valor)
-        break
-      case 'motonave':
-        setMotonave(valor)
-        break
-      case 'equipo':
-        setRegistroActual(prev => ({ ...prev, equipo: valor }))
-        break
-      case 'horaInicio':
-        setRegistroActual(prev => ({ ...prev, horaInicio: valor }))
-        break
-      case 'horaFinal':
-        setRegistroActual(prev => ({ ...prev, horaFin: valor }))
-        break
-      case 'tipoCarga':
-        setTipoCarga(valor)
-        break
-      case 'observaciones':
-        setRegistroActual(prev => ({ ...prev, observaciones: valor }))
-        break
-    }
-    
-    setOcrEditValues(prev => prev ? { ...prev, [campo]: valor } : null)
-  }
-
-  const aplicarTodosLosCampos = () => {
-    if (!ocrEditValues) return
-    
-    if (ocrEditValues.numeroRecibo) setRegistroActual(prev => ({ ...prev, nRecibo: parseInt(ocrEditValues.numeroRecibo!) || 0 }))
-    if (ocrEditValues.fecha) setFecha(ocrEditValues.fecha)
-    if (ocrEditValues.motonave) setMotonave(ocrEditValues.motonave)
-    if (ocrEditValues.equipo) setRegistroActual(prev => ({ ...prev, equipo: ocrEditValues.equipo! }))
-    if (ocrEditValues.horaInicio) setRegistroActual(prev => ({ ...prev, horaInicio: ocrEditValues.horaInicio! }))
-    if (ocrEditValues.horaFinal) setRegistroActual(prev => ({ ...prev, horaFin: ocrEditValues.horaFinal! }))
-    if (ocrEditValues.tipoCarga) setTipoCarga(ocrEditValues.tipoCarga)
-    if (ocrEditValues.observaciones) setRegistroActual(prev => ({ ...prev, observaciones: ocrEditValues.observaciones! }))
-    
-    alert('✅ Todos los campos aplicados al formulario')
-  }
-
-  const descartarOCR = () => {
-    setOcrData(null)
-    setOcrEditValues(null)
   }
 
   const guardarEnSupabase = async () => {
@@ -617,242 +499,6 @@ const handleOCRExtracted = (data: ExtractedData) => {
             </div>
           </div>
         </div>
-
-        {/* ✅ BOTÓN DE ESCANEO OCR */}
-        <div className="mb-4 p-4 bg-purple-50 rounded-lg border-2 border-dashed border-purple-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="font-semibold text-purple-900 flex items-center gap-2">
-                <Camera className="w-5 h-5" />
-                Escaneo Inteligente con OCR
-              </h4>
-              <p className="text-sm text-purple-700 mt-1">
-                Toma una foto del recibo y extrae automáticamente los datos
-              </p>
-            </div>
-            <button
-              onClick={() => setMostrarOCR(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-            >
-              <Camera className="w-4 h-4" />
-              Escanear Recibo
-            </button>
-          </div>
-        </div>
-
-        {/* ✅ MODAL DE ESCANEO OCR */}
-        {mostrarOCR && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <OCRScanner 
-                  onExtracted={handleOCRExtracted}
-                  onCancel={() => setMostrarOCR(false)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ PANEL DE DATOS EXTRAÍDOS INTELIGENTE */}
-        {ocrData && ocrEditValues && (
-          <div className="mb-4 p-4 bg-slate-50 rounded-lg border-2 border-slate-300">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-slate-900 flex items-center gap-2 text-lg">
-                <CheckCircle className="w-5 h-5 text-blue-600" />
-                Datos Extraídos del Recibo
-              </h4>
-              <div className="flex gap-2">
-                <button 
-                  onClick={aplicarTodosLosCampos} 
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                >
-                  ✅ Aplicar Todos
-                </button>
-                <button 
-                  onClick={descartarOCR} 
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
-                >
-                  ❌ Descartar
-                </button>
-              </div>
-            </div>
-            
-            <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-800">
-              💡 <strong>Guía de colores:</strong> 🟢 Verde = Confiable (aplicado auto) | 🟡 Amarillo = Revisar | 🔴 Rojo = Manual
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* N° Recibo */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.numeroRecibo)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">N° Recibo</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.numeroRecibo)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.numeroRecibo || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, numeroRecibo: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectado"
-                />
-                <button 
-                  onClick={() => aplicarCampo('numeroRecibo', ocrEditValues.numeroRecibo || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Fecha */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.fecha)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Fecha</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.fecha)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.fecha || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, fecha: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectada"
-                />
-                <button 
-                  onClick={() => aplicarCampo('fecha', ocrEditValues.fecha || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Motonave */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.motonave)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Motonave</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.motonave)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.motonave || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, motonave: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectada"
-                />
-                <button 
-                  onClick={() => aplicarCampo('motonave', ocrEditValues.motonave || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Equipo */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.equipo)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Equipo</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.equipo)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.equipo || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, equipo: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectado"
-                />
-                <button 
-                  onClick={() => aplicarCampo('equipo', ocrEditValues.equipo || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Hora Inicio */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.horas)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Hora Inicio</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.horas)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.horaInicio || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, horaInicio: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectada"
-                />
-                <button 
-                  onClick={() => aplicarCampo('horaInicio', ocrEditValues.horaInicio || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Hora Final */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.horas)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Hora Final</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.horas)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.horaFinal || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, horaFinal: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectada"
-                />
-                <button 
-                  onClick={() => aplicarCampo('horaFinal', ocrEditValues.horaFinal || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Tipo Carga */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.tipoCarga)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Tipo Carga</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.tipoCarga)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.tipoCarga || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, tipoCarga: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectado"
-                />
-                <button 
-                  onClick={() => aplicarCampo('tipoCarga', ocrEditValues.tipoCarga || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              {/* Observaciones */}
-              <div className={`p-3 rounded-lg border-2 ${getConfidenceColor(ocrData.confidence?.observaciones)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">Observaciones</span>
-                  <span className="text-xs">{getConfidenceLabel(ocrData.confidence?.observaciones)}</span>
-                </div>
-                <input
-                  type="text"
-                  value={ocrEditValues.observaciones || ''}
-                  onChange={(e) => setOcrEditValues({...ocrEditValues, observaciones: e.target.value})}
-                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm bg-white"
-                  placeholder="No detectadas"
-                />
-                <button 
-                  onClick={() => aplicarCampo('observaciones', ocrEditValues.observaciones || '')}
-                  className="mt-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  Aplicar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="mt-6 p-4 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
           <div className="flex items-center justify-between mb-3">

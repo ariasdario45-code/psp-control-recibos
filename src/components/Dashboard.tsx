@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell
 } from 'recharts'
 
 const COLORES = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
@@ -257,7 +257,7 @@ export default function Dashboard() {
                   dataKey="value"
                   stroke="none"
                 >
-                  {datosTiposCarga.map((entry, index) => (
+                  {datosTiposCarga.map((_entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORES[index % COLORES.length]} />
                   ))}
                 </Pie>

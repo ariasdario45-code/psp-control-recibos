@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface LogoPalermoProps {
   size?: 'small' | 'medium' | 'large';
   showText?: boolean;
