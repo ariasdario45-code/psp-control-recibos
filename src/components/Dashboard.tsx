@@ -14,10 +14,20 @@ const COLORES = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899
 
 // Estilo personalizado para el Tooltip de los gráficos en modo oscuro
 const tooltipStyle = {
-  backgroundColor: 'rgba(30, 41, 59, 0.95)', // slate-800 con opacidad
-  border: '1px solid rgba(71, 85, 105, 0.5)', // slate-600
+  backgroundColor: 'rgba(30, 41, 59, 0.95)',
+  border: '1px solid rgba(71, 85, 105, 0.5)',
   borderRadius: '0.5rem',
-  color: '#f8fafc' // slate-50 (blanco)
+  color: '#f8fafc'
+}
+
+// ✅ FUNCIÓN PARA CALCULAR HORAS POR RELOJ (maneja cruce de medianoche)
+const calcularHorasReloj = (horaInicio: string, horaFin: string): number => {
+  if (!horaInicio || !horaFin) return 0
+  const [h1, m1] = horaInicio.split(':').map(Number)
+  const [h2, m2] = horaFin.split(':').map(Number)
+  let minutos = (h2 * 60 + m2) - (h1 * 60 + m1)
+  if (minutos < 0) minutos += 24 * 60
+  return minutos / 60
 }
 
 export default function Dashboard() {
@@ -56,20 +66,19 @@ export default function Dashboard() {
         .from('planillas')
         .select('motonave, tipo_carga, turno, creado_en, auxiliar')
 
+      // ✅ AHORA TAMBIÉN TRAEMOS LAS HORAS DE RELOJ
       const { data: detalles } = await supabase
         .from('planilla_detalles')
-        .select('equipo, h_inicial, h_final')
+        .select('equipo, h_inicial, h_final, hora_inicio, hora_fin')
 
-      // ✅ BUG 1 CORREGIDO: Solo contar registros CERRADOS (h_final > 0)
-      // Un turno abierto (h_final = 0) NO debe sumar horas
+      // ✅ BUG CORREGIDO: Horas por RELOJ (no por horómetro)
+      // Solo se cuentan registros CERRADOS (con hora_fin)
       let totalHoras = 0
       if (detalles) {
         detalles.forEach(d => {
-          if (d.h_inicial && d.h_final && d.h_final > 0) {
-            const horas = Math.abs(d.h_final - d.h_inicial)
-            if (horas > 0 && horas < 24) { // Protege datos erróneos de horómetro
-              totalHoras += horas
-            }
+          if (d.hora_inicio && d.hora_fin) {
+            const horas = calcularHorasReloj(d.hora_inicio, d.hora_fin)
+            if (horas > 0 && horas <= 24) totalHoras += horas
           }
         })
       }
@@ -83,12 +92,12 @@ export default function Dashboard() {
         horasTrabajadas: Math.round(totalHoras * 10) / 10,
       })
 
-      // ✅ BUG 1 CORREGIDO: Gráfico solo con turnos cerrados
+      // ✅ Gráfico de equipos: también por RELOJ
       const equiposMap: Record<string, number> = {}
       detalles?.forEach(d => {
-        if (d.equipo && d.h_inicial && d.h_final && d.h_final > 0) {
-          const horas = Math.abs(d.h_final - d.h_inicial)
-          if (horas > 0 && horas < 24) { // Protege datos erróneos
+        if (d.equipo && d.hora_inicio && d.hora_fin) {
+          const horas = calcularHorasReloj(d.hora_inicio, d.hora_fin)
+          if (horas > 0 && horas <= 24) {
             equiposMap[d.equipo] = (equiposMap[d.equipo] || 0) + horas
           }
         }
@@ -241,7 +250,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Gráfico de torta - Tipos de carga */}
+        {/* Gráfico de torta - Tipos de carga (estático pero funcional) */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-100 dark:border-slate-700 transition-colors">
           <div className="flex items-center gap-2 mb-4">
             <PieChartIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
