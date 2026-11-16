@@ -60,11 +60,16 @@ export default function Dashboard() {
         .from('planilla_detalles')
         .select('equipo, h_inicial, h_final')
 
+      // ✅ BUG 1 CORREGIDO: Solo contar registros CERRADOS (h_final > 0)
+      // Un turno abierto (h_final = 0) NO debe sumar horas
       let totalHoras = 0
       if (detalles) {
         detalles.forEach(d => {
-          if (d.h_inicial && d.h_final) {
-            totalHoras += (d.h_final - d.h_inicial)
+          if (d.h_inicial && d.h_final && d.h_final > 0) {
+            const horas = Math.abs(d.h_final - d.h_inicial)
+            if (horas > 0 && horas < 24) { // Protege datos erróneos de horómetro
+              totalHoras += horas
+            }
           }
         })
       }
@@ -78,11 +83,14 @@ export default function Dashboard() {
         horasTrabajadas: Math.round(totalHoras * 10) / 10,
       })
 
+      // ✅ BUG 1 CORREGIDO: Gráfico solo con turnos cerrados
       const equiposMap: Record<string, number> = {}
       detalles?.forEach(d => {
-        if (d.equipo) {
-const horas = Math.abs(d.h_final - d.h_inicial)
-          equiposMap[d.equipo] = (equiposMap[d.equipo] || 0) + horas
+        if (d.equipo && d.h_inicial && d.h_final && d.h_final > 0) {
+          const horas = Math.abs(d.h_final - d.h_inicial)
+          if (horas > 0 && horas < 24) { // Protege datos erróneos
+            equiposMap[d.equipo] = (equiposMap[d.equipo] || 0) + horas
+          }
         }
       })
       const datosEquipos = Object.entries(equiposMap)

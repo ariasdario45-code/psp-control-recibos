@@ -52,7 +52,7 @@ interface Configuracion {
   color_primario: string
 }
 
-// ✅ FUNCIÓN PARA CALCULAR HORAS TRABAJADAS DEL ESTIBADOR
+// ✅ FUNCIÓN PARA CALCULAR HORAS TRABAJADAS (maneja cruce de medianoche)
 const calcularHorasTrabajadas = (horaInicio: string, horaFin: string): number => {
   if (!horaInicio || !horaFin) return 0
   const [h1, m1] = horaInicio.split(':').map(Number)
@@ -227,7 +227,7 @@ export default function HistorialTable() {
     }
   }
 
-  // ✅ FUNCIÓN EXPORTAR PDF COMPLETA Y CORREGIDA
+  // ✅ FUNCIÓN EXPORTAR PDF COMPLETA Y CORREGIDA (Bugs 2 y 3)
   const exportarPDF = async () => {
     if (registrosFiltrados.length === 0) { alert('No hay registros para exportar'); return }
     try {
@@ -266,17 +266,25 @@ export default function HistorialTable() {
       currentY += 10
 
       doc.setFontSize(10)
-      const infoY = currentY; const col1X = margin; const col2X = (pageWidth / 2) + 5; const col3X = pageWidth - margin - 50
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60); doc.text('Fecha:', col1X, infoY)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0); doc.text(primeraPlanilla?.fecha || 'N/A', col1X + 20, infoY)
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60); doc.text('Motonave:', col2X, infoY)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0); doc.text(primeraPlanilla?.motonave || 'N/A', col2X + 20, infoY)
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60); doc.text('Auxiliar:', col3X, infoY)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0); doc.text(primeraPlanilla?.auxiliar || 'N/A', col3X + 20, infoY)
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60); doc.text('Tipo de Carga:', col1X, infoY + 6)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0); doc.text(primeraPlanilla?.tipo_carga || 'N/A', col1X + 20, infoY + 6)
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60); doc.text('Turno:', col2X, infoY + 6)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0); doc.text(primeraPlanilla?.turno || 'N/A', col2X + 20, infoY + 6)
+      const infoY = currentY
+      const col1X = margin
+      const col2X = (pageWidth / 2) + 5
+      const col3X = pageWidth - margin - 50
+
+      // ✅ BUG 3 CORREGIDO: Medir ancho real de cada label para evitar texto pegado
+      const drawLabelValue = (label: string, value: string, x: number, y: number) => {
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60)
+        doc.text(label, x, y)
+        const labelWidth = doc.getTextWidth(label)
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0)
+        doc.text(value, x + labelWidth + 2, y)
+      }
+
+      drawLabelValue('Fecha:', primeraPlanilla?.fecha || 'N/A', col1X, infoY)
+      drawLabelValue('Motonave:', primeraPlanilla?.motonave || 'N/A', col2X, infoY)
+      drawLabelValue('Auxiliar:', primeraPlanilla?.auxiliar || 'N/A', col3X, infoY)
+      drawLabelValue('Tipo de Carga:', primeraPlanilla?.tipo_carga || 'N/A', col1X, infoY + 6)
+      drawLabelValue('Turno:', primeraPlanilla?.turno || 'N/A', col2X, infoY + 6)
       currentY = infoY + 16
 
       // ✅ TABLA CON PROVEEDOR SIEMPRE VISIBLE Y EQUIPO SOLO PARA OPERADOR
@@ -352,17 +360,37 @@ export default function HistorialTable() {
       })
 
       const finalY = (doc as any).lastAutoTable.finalY + 10
+
+      // ✅ BUG 2 CORREGIDO: Calcular horas con RELOJ (no horómetro)
+      // Un turno abierto (sin hora_fin) se marca como "En proceso"
       let totalHoras = 0
+      let registrosEnProceso = 0
       registrosFiltrados.forEach(reg => {
-        if (reg.operador && reg.h_inicial && reg.h_final) totalHoras += (reg.h_final - reg.h_inicial)
-        if (reg.estibador && reg.estib_hora_llegada && reg.estib_hora_salida) {
-          totalHoras += calcularHorasTrabajadas(reg.estib_hora_llegada, reg.estib_hora_salida)
+        if (reg.operador) {
+          if (reg.hora_inicio && reg.hora_fin) {
+            totalHoras += calcularHorasTrabajadas(reg.hora_inicio, reg.hora_fin)
+          } else if (reg.hora_inicio && !reg.hora_fin) {
+            registrosEnProceso++
+          }
+        }
+        if (reg.estibador) {
+          if (reg.estib_hora_llegada && reg.estib_hora_salida) {
+            totalHoras += calcularHorasTrabajadas(reg.estib_hora_llegada, reg.estib_hora_salida)
+          } else if (reg.estib_hora_llegada && !reg.estib_hora_salida) {
+            registrosEnProceso++
+          }
         }
       })
 
+      const textoHoras = registrosEnProceso > 0 && totalHoras === 0
+        ? 'En proceso'
+        : registrosEnProceso > 0
+          ? `${totalHoras.toFixed(1)} horas (+ ${registrosEnProceso} en proceso)`
+          : `${totalHoras.toFixed(1)} horas`
+
       doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 64, 175)
       doc.text(`Total de Registros: ${registrosFiltrados.length}`, margin, finalY)
-      doc.text(`Total Horas Trabajadas: ${totalHoras.toFixed(1)} horas`, margin, finalY + 7)
+      doc.text(`Total Horas Trabajadas: ${textoHoras}`, margin, finalY + 7)
       if (evidenciasPlanilla.length > 0) doc.text(`Evidencias Fotográficas: ${evidenciasPlanilla.length}`, margin, finalY + 14)
 
       const firmaY = finalY + 25; const firmaWidth = 70
@@ -379,28 +407,23 @@ export default function HistorialTable() {
 
       // ✅ PÁGINA 2: PORTRAIT (VERTICAL) PARA EVIDENCIAS FOTOGRÁFICAS
       if (evidenciasPlanilla.length > 0) {
-        // Agregar página en formato PORTRAIT (vertical)
         doc.addPage('letter', 'portrait')
         
-        // Obtener dimensiones de la nueva página portrait
         const portraitWidth = doc.internal.pageSize.getWidth()
         const portraitHeight = doc.internal.pageSize.getHeight()
         const portraitMargin = 15
         let imgY = portraitMargin
 
-        // Título de la sección
         doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 64, 175)
         doc.text('EVIDENCIAS FOTOGRÁFICAS', portraitWidth / 2, imgY, { align: 'center' })
         imgY += 8
 
-        // Subtítulo con información
         doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80)
         doc.text(`Planilla del ${primeraPlanilla?.fecha || 'N/A'} - ${primeraPlanilla?.motonave || ''}`, portraitWidth / 2, imgY, { align: 'center' })
         imgY += 6
         doc.text(`Total de imágenes: ${evidenciasPlanilla.length}`, portraitWidth / 2, imgY, { align: 'center' })
         imgY += 10
 
-        // Línea separadora
         doc.setDrawColor(30, 64, 175); doc.setLineWidth(0.5)
         doc.line(portraitMargin, imgY, portraitWidth - portraitMargin, imgY)
         imgY += 10
@@ -412,7 +435,6 @@ export default function HistorialTable() {
           const evidencia = evidenciasPlanilla[i]
           console.log(`🖼️ Procesando imagen ${i + 1}/${evidenciasPlanilla.length}:`, evidencia.imagen_url)
           
-          // Si no hay espacio suficiente, agregar nueva página portrait
           if (imgY > portraitHeight - 100) { 
             doc.addPage('letter', 'portrait')
             imgY = portraitMargin 
@@ -421,11 +443,9 @@ export default function HistorialTable() {
           try {
             const { base64: base64Img, format } = await convertirImagenABase64(evidencia.imagen_url)
             
-            // ✅ DIMENSIONES OPTIMIZADAS PARA PORTRAIT (aprovecha el alto de la página)
             const maxWidth = portraitWidth - (portraitMargin * 2)
             const maxHeight = portraitHeight - imgY - 40
             
-            // Crear imagen temporal para obtener dimensiones reales
             const img = new Image()
             img.src = base64Img
             
@@ -434,12 +454,10 @@ export default function HistorialTable() {
               img.onerror = () => resolve(null)
             })
             
-            // Calcular proporciones manteniendo aspect ratio
             let imgWidth = img.width
             let imgHeight = img.height
             const ratio = imgWidth / imgHeight
             
-            // Ajustar al espacio disponible manteniendo proporciones
             if (imgWidth > maxWidth) {
               imgWidth = maxWidth
               imgHeight = imgWidth / ratio
@@ -451,7 +469,6 @@ export default function HistorialTable() {
             
             console.log(`📐 Dimensiones finales: ${imgWidth.toFixed(1)}x${imgHeight.toFixed(1)} mm`)
             
-            // Centrar imagen horizontalmente
             const xPos = (portraitWidth - imgWidth) / 2
             
             doc.addImage(base64Img, format, xPos, imgY, imgWidth, imgHeight)
@@ -461,7 +478,6 @@ export default function HistorialTable() {
             doc.text(`Imagen ${i + 1} de ${evidenciasPlanilla.length}`, portraitWidth / 2, imgY, { align: 'center' })
             imgY += 8
             
-            // Línea separadora entre imágenes
             doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.2)
             doc.line(portraitMargin, imgY, portraitWidth - portraitMargin, imgY)
             imgY += 10
@@ -479,7 +495,6 @@ export default function HistorialTable() {
         
         console.log(`📊 Resumen evidencias: ${imagenesCargadas} cargadas, ${imagenesFallidas} fallidas`)
         
-        // Pie de página en la última página portrait
         const lastPageFooterY = portraitHeight - 10
         doc.setFontSize(7); doc.setTextColor(150, 150, 150)
         doc.text(`Documento generado el ${new Date().toLocaleDateString('es-CO')} - ${config.nombre_empresa}`, portraitWidth / 2, lastPageFooterY, { align: 'center' })
@@ -651,7 +666,6 @@ export default function HistorialTable() {
               ) : planillas.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No hay turnos registrados. Ve a "Nuevo registro" para crear uno.</td></tr>
               ) : (
-                // ✅ CORRECCIÓN 1: Agregado tipado explícito (planilla: any)
                 planillas.map((planilla: any) => (
                   <tr key={planilla.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                     <td className="px-3 py-3 text-sm text-slate-900 dark:text-white">{planilla.fecha}</td>
@@ -736,7 +750,6 @@ export default function HistorialTable() {
                     Evidencias Fotográficas ({imagenesPreview.length})
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {/* ✅ CORRECCIÓN 2: _idx en lugar de idx (variable no usada) */}
                     {imagenesPreview.map((img, _idx) => (
                       <div key={_idx} className="relative group bg-white dark:bg-slate-700 rounded-lg overflow-hidden border border-purple-200 dark:border-purple-700 transition-colors">
                         <img 
