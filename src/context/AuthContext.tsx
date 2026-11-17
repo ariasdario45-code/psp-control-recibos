@@ -6,7 +6,7 @@ export interface Usuario {
   id: number
   codigo: string
   nombre: string
-  rol: string
+  rol: string //
   email?: string
 }
 
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: data.id,
         codigo: data.codigo,
         nombre: data.nombre,
-        rol: data.rol,
+        rol: data.rol, //
         email: data.email
       }
       

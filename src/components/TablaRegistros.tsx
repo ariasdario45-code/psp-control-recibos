@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+// ✅ CAMBIO 1 (2 líneas): Imports para aislamiento de datos
+import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../context/usePermissions'
 import {
   Plus, Trash2, ArrowLeft, Lock, Clock, FileText, Loader2, XCircle, Image as ImageIcon, Save, Wand2, Edit2, X
 } from 'lucide-react'
@@ -53,6 +56,9 @@ const opcionesHora = generarHoras()
 export default function TablaRegistros() {
   const { id } = useParams()
   const navigate = useNavigate()
+  // ✅ CAMBIO 2 (2 líneas): Hooks para autenticación y permisos
+  const { usuario } = useAuth()
+  const { esAdmin } = usePermissions()
 
   const [planilla, setPlanilla] = useState<Planilla | null>(null)
   const [registros, setRegistros] = useState<Registro[]>([])
@@ -104,6 +110,15 @@ export default function TablaRegistros() {
       mostrarMensaje('error', 'Error al cargar la planilla')
       return
     }
+    
+    // ✅ CAMBIO 3 (5 líneas): Verificar permisos de acceso al turno
+    // Si NO es admin Y el usuario no creó esta planilla, bloquear acceso
+    if (!esAdmin && data.creado_por !== usuario?.codigo) {
+      mostrarMensaje('error', '🚫 No tienes permiso para ver o editar este turno.')
+      setTimeout(() => navigate('/panel'), 2000)
+      return
+    }
+    
     setPlanilla(data)
   }
 
@@ -237,9 +252,6 @@ export default function TablaRegistros() {
     return true
   }, [registros])
 
- // ✅ Auto-asignado DESACTIVADO - Solo manual con botón "Auto Horas Salida"
-// El auxiliar decide cuándo asignar las horas de salida
-
   const autoCompletarHorasSalida = async () => {
     if (!planilla) return
     const horaSugerida = planilla.turno === 'DIA' ? '19:30' : '07:30'
@@ -316,7 +328,6 @@ export default function TablaRegistros() {
     mostrarMensaje('exito', 'Registro eliminado', 2000)
   }
 
-  // ✅ NUEVA FUNCIÓN: Guardar edición desde modal
   const guardarEdicion = async () => {
     if (!registroEditando) return
 
@@ -342,7 +353,6 @@ export default function TablaRegistros() {
     if (error) {
       mostrarMensaje('error', `Error al guardar: ${error.message}`)
     } else {
-      // Actualizar el registro en el estado local
       const nuevosRegistros = registros.map(reg => 
         reg.id === registroEditando.id ? registroEditando : reg
       )

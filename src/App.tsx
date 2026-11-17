@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { usePermissions, type Rol } from './context/usePermissions'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import NuevoTurno from './components/NuevoTurno'
@@ -11,9 +12,15 @@ import Configuracion from './components/Configuracion'
 import Admin from './components/Admin'
 import Login from './components/Login'
 
-// Componente para proteger rutas (solo usuarios logueados)
-function ProtectedRoute({ children }: { children: ReactNode }) {
+function ProtectedRoute({ 
+  children, 
+  rolesPermitidos 
+}: { 
+  children: ReactNode
+  rolesPermitidos?: Rol[] 
+}) {
   const { usuario, cargando } = useAuth()
+  const { rol } = usePermissions()
   
   if (cargando) {
     return (
@@ -30,10 +37,13 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />
   }
   
+  if (rolesPermitidos && !rolesPermitidos.includes(rol)) {
+    return <Navigate to="/panel" replace />
+  }
+  
   return <>{children}</>
 }
 
-// Layout principal con Sidebar
 function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-150 flex">
@@ -48,67 +58,33 @@ function Layout({ children }: { children: ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Ruta pública - Login */}
       <Route path="/login" element={<Login />} />
       
-      {/* Rutas protegidas */}
+      {/* Rutas para TODOS los roles */}
       <Route path="/panel" element={
-        <ProtectedRoute>
-          <Layout>
-            <Dashboard />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>
       } />
-      
       <Route path="/nuevo" element={
-        <ProtectedRoute>
-          <Layout>
-            <NuevoTurno />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute><Layout><NuevoTurno /></Layout></ProtectedRoute>
       } />
-      
       <Route path="/turno/:id" element={
-        <ProtectedRoute>
-          <Layout>
-            <TablaRegistros />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute><Layout><TablaRegistros /></Layout></ProtectedRoute>
       } />
-      
       <Route path="/historial" element={
-        <ProtectedRoute>
-          <Layout>
-            <HistorialTable />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute><Layout><HistorialTable /></Layout></ProtectedRoute>
       } />
       
+      {/* ✅ Rutas SOLO para admin */}
       <Route path="/usuarios" element={
-        <ProtectedRoute>
-          <Layout>
-            <GestionUsuarios />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute rolesPermitidos={['admin']}><Layout><GestionUsuarios /></Layout></ProtectedRoute>
       } />
-      
       <Route path="/configuracion" element={
-        <ProtectedRoute>
-          <Layout>
-            <Configuracion />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute rolesPermitidos={['admin']}><Layout><Configuracion /></Layout></ProtectedRoute>
       } />
-      
       <Route path="/admin" element={
-        <ProtectedRoute>
-          <Layout>
-            <Admin />
-          </Layout>
-        </ProtectedRoute>
+        <ProtectedRoute rolesPermitidos={['admin']}><Layout><Admin /></Layout></ProtectedRoute>
       } />
       
-      {/* Ruta por defecto - redirige al panel */}
       <Route path="/" element={<Navigate to="/panel" replace />} />
       <Route path="*" element={<Navigate to="/panel" replace />} />
     </Routes>

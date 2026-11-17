@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useTheme } from '../context/ThemeContext' // ✅ AGREGADO
+import { useTheme } from '../context/ThemeContext'
+import { usePermissions } from '../context/usePermissions'
 import LogoPalermo from './LogoPalermo'
 import { 
   LayoutDashboard, 
@@ -16,25 +17,26 @@ import {
   Menu,
   X,
   Moon,
-  Sun // ✅ AGREGADOS
+  Sun
 } from 'lucide-react'
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const location = useLocation()
-  const { usuario, logout, esAdmin } = useAuth()
-  const { theme, toggleTheme } = useTheme() // ✅ AGREGADO
+  const { usuario, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
+  const { puedeVerUsuarios, puedeVerConfiguracion, puedeVerAdministracion } = usePermissions()
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Panel', path: '/panel' },
-    { icon: PlusCircle, label: 'Nuevo registro', path: '/nuevo' },
-    { icon: Clock, label: 'Historial', path: '/historial' },
-    { icon: Users, label: 'Usuarios', path: '/usuarios', soloAdmin: true },
-    { icon: Settings, label: 'Configuración', path: '/configuracion', soloAdmin: true },
-    { icon: Database, label: 'Administración', path: '/admin', soloAdmin: true },
+    { icon: LayoutDashboard, label: 'Panel', path: '/panel', permitido: true },
+    { icon: PlusCircle, label: 'Nuevo registro', path: '/nuevo', permitido: true },
+    { icon: Clock, label: 'Historial', path: '/historial', permitido: true },
+    { icon: Users, label: 'Usuarios', path: '/usuarios', permitido: puedeVerUsuarios },
+    { icon: Settings, label: 'Configuración', path: '/configuracion', permitido: puedeVerConfiguracion },
+    { icon: Database, label: 'Administración', path: '/admin', permitido: puedeVerAdministracion },
   ]
 
-  const menuFiltrado = menuItems.filter(item => !item.soloAdmin || esAdmin)
+  const menuFiltrado = menuItems.filter(item => item.permitido)
 
   return (
     <>
@@ -106,7 +108,7 @@ export default function Sidebar() {
 
         {/* FOOTER CON USUARIO Y LOGOUT */}
         <div className="p-4 border-t border-slate-700 bg-slate-800/50">
-          {/* ✅ BOTÓN MODO OSCURO/CLARO */}
+          {/* BOTÓN MODO OSCURO/CLARO */}
           <button
             onClick={toggleTheme}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 mb-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all text-sm font-medium border border-slate-600"
@@ -131,10 +133,12 @@ export default function Sidebar() {
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate text-white">{usuario?.nombre}</p>
               <p className="text-xs text-slate-400 truncate">{usuario?.codigo}</p>
-              <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 font-medium ${
-                esAdmin 
+              <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 font-medium uppercase ${
+                usuario?.rol === 'admin' || usuario?.rol === 'superadmin'
                   ? 'bg-purple-600/80 text-white' 
-                  : 'bg-[#0077B6]/80 text-white'
+                  : usuario?.rol === 'supervisor_planer'
+                    ? 'bg-[#00A8E8]/80 text-white'
+                    : 'bg-[#0077B6]/80 text-white'
               }`}>
                 {usuario?.rol}
               </span>

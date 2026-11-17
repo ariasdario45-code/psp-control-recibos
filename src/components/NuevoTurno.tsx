@@ -1,11 +1,91 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { 
   Ship, Package, Clock, User, Calendar, Timer, 
-  AlertCircle, CheckCircle2, Loader2, Image as ImageIcon 
+  AlertCircle, CheckCircle2, Loader2, Image as ImageIcon,
+  Lock, ChevronDown
 } from 'lucide-react'
+
+// ✅ Componente reutilizable: Input con dropdown inteligente
+function AutoCompleteInput({ 
+  label, 
+  icon: Icon, 
+  value, 
+  onChange, 
+  options, 
+  placeholder 
+}: { 
+  label: string
+  icon: any
+  value: string
+  onChange: (value: string) => void
+  options: string[]
+  placeholder: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [filteredOptions, setFilteredOptions] = useState<string[]>(options)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setFilteredOptions(options.filter(opt => 
+      opt.toLowerCase().includes(value.toLowerCase())
+    ))
+  }, [value, options])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+        <Icon className="w-4 h-4" />
+        {label} *
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setIsOpen(true)}
+          className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-[#0077B6] focus:border-transparent outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white pr-10"
+          placeholder={placeholder}
+        />
+        <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filteredOptions.map((option, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                onChange(option)
+                setIsOpen(false)
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+        💡 Escribe o selecciona. Si no existe, se registrará automáticamente.
+      </p>
+    </div>
+  )
+}
 
 export default function NuevoTurno() {
   const navigate = useNavigate()
@@ -17,49 +97,55 @@ export default function NuevoTurno() {
   
   const [motonave, setMotonave] = useState('')
   const [tipoCarga, setTipoCarga] = useState('')
-  const [turno, setTurno] = useState('DIA')
-  const [auxiliar, setAuxiliar] = useState('')
+  const [turno, setTurno] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [horaInicio, setHoraInicio] = useState('')
   
   const [archivos, setArchivos] = useState<File[]>([])
   
-  const [naves, setNaves] = useState<any[]>([])
-  const [auxiliares, setAuxiliares] = useState<any[]>([])
-  const [tiposCarga] = useState(['ACERO', 'CARGA GENERAL', 'CONTENEDORES', 'COQUE'])
+  const [naves, setNaves] = useState<string[]>([])
+  const [tiposCarga, setTiposCarga] = useState<string[]>([])
+
+  // ✅ El auxiliar es SIEMPRE el nombre del usuario logueado (bloqueado)
+  const auxiliar = usuario?.nombre || ''
 
   useEffect(() => {
     cargarDatos()
+    autoDetectarTurno()
   }, [])
 
-  useEffect(() => {
-    if (turno === 'DIA' && !horaInicio) setHoraInicio('07:30')
-    else if (turno === 'NOCHE' && !horaInicio) setHoraInicio('19:30')
-  }, [turno])
+  // ✅ Auto-detectar turno según hora actual
+  const autoDetectarTurno = () => {
+    const ahora = new Date()
+    const hora = ahora.getHours()
+    const minutos = ahora.getMinutes()
+    const totalMinutos = hora * 60 + minutos
+    
+    const esDia = totalMinutos >= 7 * 60 + 30 && totalMinutos < 19 * 60 + 30
+    
+    const turnoDetectado = esDia ? 'DIA' : 'NOCHE'
+    setTurno(turnoDetectado)
+    setHoraInicio(turnoDetectado === 'DIA' ? '07:30' : '19:30')
+  }
 
   const cargarDatos = async () => {
     try {
       const { data: navesData } = await supabase
         .from('naves')
-        .select('*')
+        .select('nombre')
         .order('nombre', { ascending: true })
       
-      if (navesData) setNaves(navesData)
-      
-      const { data: auxData } = await supabase
-        .from('auxiliares')
-        .select('*')
+      if (navesData) setNaves(navesData.map(n => n.nombre))
+
+      const { data: tiposData } = await supabase
+        .from('tipos_carga')
+        .select('nombre')
         .order('nombre', { ascending: true })
       
-      if (auxData) {
-        setAuxiliares(auxData)
-        
-        if (usuario?.nombre) {
-          const auxEncontrado = auxData.find((a: any) => 
-            a.nombre.toLowerCase() === usuario.nombre.toLowerCase()
-          )
-          if (auxEncontrado) setAuxiliar(auxEncontrado.nombre)
-        }
+      if (tiposData) {
+        setTiposCarga(tiposData.map(t => t.nombre))
+      } else {
+        setTiposCarga(['ACERO', 'CARGA GENERAL', 'CONTENEDORES', 'COQUE'])
       }
     } catch (err) {
       console.error('Error cargando datos:', err)
@@ -71,12 +157,12 @@ export default function NuevoTurno() {
       setError('Debes ingresar o seleccionar una motonave')
       return
     }
-    if (!tipoCarga) {
-      setError('Debes seleccionar un tipo de carga')
+    if (!tipoCarga.trim()) {
+      setError('Debes ingresar o seleccionar un tipo de carga')
       return
     }
     if (!auxiliar) {
-      setError('Debes seleccionar un auxiliar')
+      setError('No se pudo identificar tu usuario. Cierra sesión y vuelve a entrar.')
       return
     }
     if (!fecha) {
@@ -93,6 +179,9 @@ export default function NuevoTurno() {
 
     try {
       const motonaveLimpia = motonave.trim()
+      const tipoCargaLimpio = tipoCarga.trim().toUpperCase()
+
+      // ✅ CAMPO INTELIGENTE: Crear motonave si no existe
       const { data: naveExistente } = await supabase
         .from('naves')
         .select('id')
@@ -100,24 +189,31 @@ export default function NuevoTurno() {
         .single()
 
       if (!naveExistente) {
-        const { error: errorNave } = await supabase
-          .from('naves')
-          .insert({ nombre: motonaveLimpia })
-        
-        if (errorNave) {
-          console.error('⚠️ Error al crear nueva motonave:', errorNave)
-        }
+        await supabase.from('naves').insert({ nombre: motonaveLimpia })
       }
 
+      // ✅ CAMPO INTELIGENTE: Crear tipo de carga si no existe
+      const { data: tipoExistente } = await supabase
+        .from('tipos_carga')
+        .select('id')
+        .eq('nombre', tipoCargaLimpio)
+        .single()
+
+      if (!tipoExistente) {
+        await supabase.from('tipos_carga').insert({ nombre: tipoCargaLimpio })
+      }
+
+      // ✅ Guardar planilla con el nombre del usuario logueado (bloqueado)
       const { data: planillaData, error: planillaError } = await supabase
         .from('planillas')
         .insert({
           motonave: motonaveLimpia,
-          tipo_carga: tipoCarga,
+          tipo_carga: tipoCargaLimpio,
           turno: turno,
           auxiliar: auxiliar,
           fecha: fecha,
           hora_inicio: horaInicio,
+          creado_por: usuario?.codigo,
           estado: 'EN_CURSO'
         })
         .select()
@@ -125,6 +221,7 @@ export default function NuevoTurno() {
 
       if (planillaError) throw planillaError
 
+      // Subir evidencias fotográficas
       if (archivos.length > 0) {
         for (const file of archivos) {
           const fileName = `${Date.now()}_${file.name}`
@@ -173,9 +270,7 @@ export default function NuevoTurno() {
         {error && (
           <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3 transition-colors">
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-red-900 dark:text-red-300">{error}</p>
-            </div>
+            <p className="text-sm font-medium text-red-900 dark:text-red-300">{error}</p>
           </div>
         )}
 
@@ -190,60 +285,40 @@ export default function NuevoTurno() {
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Motonave */}
+            {/* Motonave - CAMPO INTELIGENTE */}
             <div className="md:col-span-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                <Ship className="w-4 h-4" />
-                Motonave *
-              </label>
-              <input
-                type="text"
+              <AutoCompleteInput
+                label="Motonave"
+                icon={Ship}
                 value={motonave}
-                onChange={(e) => setMotonave(e.target.value)}
-                list="lista-naves"
-                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-[#0077B6] focus:border-transparent outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                onChange={setMotonave}
+                options={naves}
                 placeholder="Escribe o selecciona una motonave..."
               />
-              <datalist id="lista-naves">
-                {naves.map((nave) => (
-                  <option key={nave.id} value={nave.nombre} />
-                ))}
-              </datalist>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                💡 Escribe el nombre. Si no existe en la base de datos, se registrará automáticamente.
-              </p>
             </div>
 
-            {/* Tipo de Carga */}
+            {/* Tipo de Carga - CAMPO INTELIGENTE */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                <Package className="w-4 h-4" />
-                Tipo de Carga *
-              </label>
-              <select
+              <AutoCompleteInput
+                label="Tipo de Carga"
+                icon={Package}
                 value={tipoCarga}
-                onChange={(e) => setTipoCarga(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-[#0077B6] focus:border-transparent outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-              >
-                <option value="">Seleccionar tipo...</option>
-                {tiposCarga.map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {tipo}
-                  </option>
-                ))}
-              </select>
+                onChange={setTipoCarga}
+                options={tiposCarga}
+                placeholder="Escribe o selecciona un tipo de carga..."
+              />
             </div>
 
-            {/* Turno */}
+            {/* Turno - AUTO-DETECTADO */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 <Clock className="w-4 h-4" />
-                Turno *
+                Turno * <span className="text-xs text-slate-500">(detectado automáticamente)</span>
               </label>
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setTurno('DIA')}
+                  onClick={() => { setTurno('DIA'); setHoraInicio('07:30') }}
                   className={`flex-1 px-4 py-2.5 rounded-lg border-2 font-medium transition-all ${
                     turno === 'DIA'
                       ? 'border-[#0077B6] bg-[#0077B6] text-white'
@@ -254,7 +329,7 @@ export default function NuevoTurno() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTurno('NOCHE')}
+                  onClick={() => { setTurno('NOCHE'); setHoraInicio('19:30') }}
                   className={`flex-1 px-4 py-2.5 rounded-lg border-2 font-medium transition-all ${
                     turno === 'NOCHE'
                       ? 'border-[#023E8A] bg-[#023E8A] text-white'
@@ -266,24 +341,19 @@ export default function NuevoTurno() {
               </div>
             </div>
 
-            {/* Auxiliar */}
+            {/* ✅ Auxiliar - BLOQUEADO (nombre del usuario logueado) */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 <User className="w-4 h-4" />
-                Auxiliar *
+                Auxiliar * <span className="text-xs text-slate-500">(tu usuario - automático)</span>
               </label>
-              <select
-                value={auxiliar}
-                onChange={(e) => setAuxiliar(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-[#0077B6] focus:border-transparent outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-              >
-                <option value="">Seleccionar auxiliar...</option>
-                {auxiliares.map((aux) => (
-                  <option key={aux.id} value={aux.nombre}>
-                    {aux.nombre}
-                  </option>
-                ))}
-              </select>
+              <div className="w-full px-4 py-2.5 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-medium flex items-center gap-2 cursor-not-allowed">
+                <Lock className="w-4 h-4 text-slate-500" />
+                {auxiliar || 'Sin usuario'}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                🔒 Este campo se registra automáticamente con tu usuario. No se puede cambiar.
+              </p>
             </div>
 
             {/* Fecha */}
@@ -301,7 +371,7 @@ export default function NuevoTurno() {
             </div>
 
             {/* Hora Inicio */}
-            <div className="md:col-span-2">
+            <div>
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 <Timer className="w-4 h-4" />
                 Hora de Inicio *
@@ -374,10 +444,11 @@ export default function NuevoTurno() {
         <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors">
           <h3 className="font-medium text-blue-900 dark:text-blue-300 mb-2">💡 ¿Cómo funciona?</h3>
           <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+            <li>• El turno se detecta automáticamente según la hora actual</li>
+            <li>• El auxiliar se registra automáticamente con tu usuario (bloqueado)</li>
+            <li>• Motonave y Tipo de Carga son campos inteligentes (se crean si no existen)</li>
             <li>• Al crear el turno, serás redirigido a la tabla de registros</li>
             <li>• Podrás agregar equipos, operadores y datos durante el turno</li>
-            <li>• Los cambios se guardan automáticamente</li>
-            <li>• Al finalizar (19:30 o 07:30), podrás cerrar el turno</li>
           </ul>
         </div>
       </div>

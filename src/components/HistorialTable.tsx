@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Download, Filter, Edit2, Trash2, FileText, X, Image as ImageIcon, Ship } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+// ✅ CAMBIO 1 (2 líneas nuevas): Imports para aislamiento de datos
+import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../context/usePermissions'
 import * as ExcelJS from 'exceljs'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -97,6 +100,10 @@ const convertirImagenABase64 = async (url: string): Promise<{ base64: string; fo
 
 export default function HistorialTable() {
   const navigate = useNavigate()
+  // ✅ CAMBIO 2 (2 líneas nuevas): Hooks de autenticación y permisos
+  const { usuario } = useAuth()
+  const { esAdmin } = usePermissions()
+
   const [planillas, setPlanillas] = useState<any[]>([])
   const [evidencias, setEvidencias] = useState<Map<number, Evidencia[]>>(new Map())
   const [cargando, setCargando] = useState(true)
@@ -149,6 +156,12 @@ export default function HistorialTable() {
         .from('planillas')
         .select(`*, planilla_detalles(*)`)
         .order('creado_en', { ascending: false })
+
+      // ✅ CAMBIO 3 (3 líneas nuevas): Aislamiento de datos por rol
+      // Si NO es admin, solo consulta planillas creadas por el usuario actual
+      if (!esAdmin && usuario?.codigo) {
+        query = query.eq('creado_por', usuario.codigo)
+      }
 
       if (filtros.fecha) query = query.eq('fecha', filtros.fecha)
       if (filtros.tipoCarga) query = query.eq('tipo_carga', filtros.tipoCarga)
@@ -697,6 +710,7 @@ export default function HistorialTable() {
         </div>
       </div>
 
+      {/* ✅ MODAL DE VISTA PREVIA (RESTAURADO - las 100 líneas que borré por error) */}
       {mostrandoPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 transition-colors">

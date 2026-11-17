@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+// ✅ CAMBIO 1 (1 línea): Import para aislamiento de datos
+import { usePermissions } from '../context/usePermissions'
 import { supabase } from '../lib/supabase'
 import { 
   FileText, Users, Ship, Clock, TrendingUp, Calendar,
@@ -32,6 +34,8 @@ const calcularHorasReloj = (horaInicio: string, horaFin: string): number => {
 
 export default function Dashboard() {
   const { usuario } = useAuth()
+  // ✅ CAMBIO 2 (1 línea): Hook para verificar rol de admin
+  const { esAdmin } = usePermissions()
   const [stats, setStats] = useState({
     totalPlanillas: 0,
     auxiliaresActivos: 0,
@@ -52,9 +56,12 @@ export default function Dashboard() {
     setCargando(true)
 
     try {
-      const { count: countPlanillas } = await supabase
-        .from('planillas')
-        .select('*', { count: 'exact', head: true })
+      // ✅ CAMBIO 3 (3 líneas): Filtrar conteo por rol
+      let countQuery = supabase.from('planillas').select('*', { count: 'exact', head: true })
+      if (!esAdmin && usuario?.codigo) {
+        countQuery = countQuery.eq('creado_por', usuario.codigo)
+      }
+      const { count: countPlanillas } = await countQuery
 
       const { count: countAuxiliares } = await supabase
         .from('usuarios')
@@ -62,14 +69,22 @@ export default function Dashboard() {
         .eq('estado', 'HABILITADO')
         .eq('rol', 'AUXILIAR')
 
-      const { data: planillas } = await supabase
-        .from('planillas')
-        .select('motonave, tipo_carga, turno, creado_en, auxiliar')
+      // ✅ CAMBIO 4 (3 líneas): Filtrar planillas por rol
+      let planillasQuery = supabase.from('planillas').select('motonave, tipo_carga, turno, creado_en, auxiliar, id')
+      if (!esAdmin && usuario?.codigo) {
+        planillasQuery = planillasQuery.eq('creado_por', usuario.codigo)
+      }
+      const { data: planillas } = await planillasQuery
 
-      // ✅ AHORA TAMBIÉN TRAEMOS LAS HORAS DE RELOJ
-      const { data: detalles } = await supabase
-        .from('planilla_detalles')
-        .select('equipo, h_inicial, h_final, hora_inicio, hora_fin')
+      // ✅ CAMBIO 5 (4 líneas): Filtrar detalles según planillas permitidas
+      let detallesQuery = supabase.from('planilla_detalles').select('equipo, h_inicial, h_final, hora_inicio, hora_fin, planilla_id')
+      if (!esAdmin && planillas && planillas.length > 0) {
+        const planillaIds = planillas.map(p => p.id)
+        detallesQuery = detallesQuery.in('planilla_id', planillaIds)
+      } else if (!esAdmin) {
+        detallesQuery = detallesQuery.eq('id', -1) // Sin resultados si no hay planillas
+      }
+      const { data: detalles } = await detallesQuery
 
       // ✅ BUG CORREGIDO: Horas por RELOJ (no por horómetro)
       // Solo se cuentan registros CERRADOS (con hora_fin)
@@ -128,11 +143,12 @@ export default function Dashboard() {
         { name: 'Noche', value: turnosMap.NOCHE },
       ])
 
-      const { data: recientes } = await supabase
-        .from('planillas')
-        .select('*')
-        .order('creado_en', { ascending: false })
-        .limit(5)
+      // ✅ CAMBIO 6 (3 líneas): Filtrar recientes por rol
+      let recientesQuery = supabase.from('planillas').select('*').order('creado_en', { ascending: false }).limit(5)
+      if (!esAdmin && usuario?.codigo) {
+        recientesQuery = recientesQuery.eq('creado_por', usuario.codigo)
+      }
+      const { data: recientes } = await recientesQuery
       setPlanillasRecientes(recientes || [])
 
     } catch (error) {
